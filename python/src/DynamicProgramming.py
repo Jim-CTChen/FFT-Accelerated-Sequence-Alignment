@@ -20,3 +20,21 @@ class DPEngine(object):
         score = self.sw.calculate_score()
         print(f'score: {score}')
         return score
+
+    def traceback(self):
+        self.sw.traceback()
+
+    def show_score_matrix(self):
+        self.sw.show_score_matrix()
+
+    @property
+    def score_matrix(self):
+        return self.sw.score_matrix
+
+    @property
+    def path(self):
+        return self.sw.path
+
+    @property
+    def trace_matrix(self):
+        return self.sw.trace_matrix

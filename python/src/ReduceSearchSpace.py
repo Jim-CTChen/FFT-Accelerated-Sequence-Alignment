@@ -11,7 +11,7 @@ class ReduceSearchSpace(object):
     def __init__(self, homologous_segment_sets: HomologousSegmentSet, ref_len, qry_len):
         self.homologous_segment_sets = homologous_segment_sets
         self.num_of_set = len(homologous_segment_sets)
-        self.sequence_length = l
+        # self.sequence_length = l
         self.ref_len = ref_len
         self.qry_len = qry_len
     

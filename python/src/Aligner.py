@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from config import NUCLEIC_ACID_MAPPING, AMINO_ACID_MAPPING
 
 class Aligner(object):
@@ -29,13 +30,14 @@ class Aligner(object):
         self.insertion_matrix = np.zeros((len(qry)+1, len(ref)+1)) # pad for, zero border
         self.deletion_matrix  = np.zeros((len(qry)+1, len(ref)+1)) # pad for, zero border
         self.trace_matrix     = np.zeros((len(qry)+1, len(ref)+1)) # pad for, zero border
-        self.match_score = 8
-        self.mismatch_score = -5
-        self.gap_open_penalty = -7
-        self.gap_ext_penalty = -3
+        self.match_score = 2
+        self.mismatch_score = -1
+        self.gap_open_penalty = -2
+        self.gap_ext_penalty = -1
         self.alg = alg
         self.mapping = NUCLEIC_ACID_MAPPING if mol_type == 'DNA-RNA' else mol_type == AMINO_ACID_MAPPING
-    
+        self.path = []
+
     def _reset_matrix(self):
         self.insertion_matrix.fill(0)
         self.deletion_matrix.fill(0)
@@ -83,9 +85,9 @@ class Aligner(object):
                     self.score_matrix[i][j], self.trace_matrix[i][j] = max(
                         match,
                         deletion,
-                        insertion,
-                        (0, 0)
+                        insertion
                     )
+                    if self.score_matrix[i][j] < 0: self.score_matrix[i][j] = 0
                 elif self.alg == 'NW':
                     self.score_matrix[i][j], self.trace_matrix[i][j] = max(
                         match,
@@ -149,6 +151,11 @@ class Aligner(object):
                 print('{0:>6}'.format(SYMBOL[col]), end='')
             print()
 
+    def show_score_matrix(self):
+        plt.imshow(self.score_matrix, cmap='hot', interpolation='nearest')
+        plt.show()
+        # plt.imsave('mat.jpg', self.score_matrix, cmap='hot')
+
     def calculate_score_in_reduced_space(self, key_points: np.ndarray) -> int:
         '''
             key_points should be sorted by ascending order
@@ -206,26 +213,28 @@ class Aligner(object):
         aligned_ref = []
         aligned_qry = []
         if self.alg == 'SW':
-            x, y = np.unravel_index(np.argmax(self.score_matrix, axis=None), self.score_matrix.shape)
+            y, x = np.unravel_index(np.argmax(self.score_matrix, axis=None), self.score_matrix.shape)
         elif self.alg == 'NW':
-            x, y = self.ref.shape[0]-1, self.qry.shape[0]-1
+            x, y = self.ref.shape[0], self.qry.shape[0]
 
-        while x != 0 and y != 0:
+        while x != 1 and y != 1:
+            if self.alg == 'SW' and not self.score_matrix[y][x]: break
+            self.path.append([x, y])
             if self.trace_matrix[y][x] == self.MATCH:
-                aligned_ref.append(self.ref[x])
-                aligned_qry.append(self.qry[y])
+                aligned_ref.append(self.ref[x-1])
+                aligned_qry.append(self.qry[y-1])
                 x -= 1
                 y -= 1
             elif self.trace_matrix[y][x] == self.INSERTION:
                 aligned_ref.append(GAP_SYMBOL_MAPPING)
-                aligned_qry.append(self.qry[y])
+                aligned_qry.append(self.qry[y-1])
                 y -= 1
             elif self.trace_matrix[y][x] == self.DELETION:
-                aligned_ref.append(self.ref[x])
+                aligned_ref.append(self.ref[x-1])
                 aligned_qry.append(GAP_SYMBOL_MAPPING)
                 x -= 1
             else:
-                assert False, 'something wrong when trace back'
+                assert False, f'something wrong when trace back with trace_matrix at (x, y) = ({x}, {y}), score: {self.score_matrix[y][x]}, trace: {self.trace_matrix[y][x]}'
 
 
         aligned_ref = [str(s) for s in reversed(aligned_ref)]

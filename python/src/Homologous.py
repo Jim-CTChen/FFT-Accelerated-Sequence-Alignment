@@ -18,7 +18,7 @@ class Homologous(object):
         self.wndw_size = wndw_size      # window size for sliding window
         self.maximum_segment_length = l # maximum length for homologous segment)
     
-    def _get_score(self, ref, qry, mode='SW'):
+    def _get_score(self, ref, qry, mode='DOT'):
         '''
             use different score system to calculate score between ref & qry
             mode: 
@@ -53,7 +53,7 @@ class Homologous(object):
         padded_L = None
         abs_offset = abs(offset)
         if offset < 0: # pad ref left
-            padded_L = max(self.ref_len+abs_offset, self.qry_len)
+            padded_L = max(self.ref_len+abs_offset, self.qry_len) # 598+13
         else: # pad qry left
             padded_L = max(self.ref_len, self.qry_len+abs_offset)
 
@@ -90,7 +90,7 @@ class Homologous(object):
                 if offset < 0:
                     # print(f'offset: {offset}')
                     # print(f'append {i-offset}')
-                    ref_segment_list.append(i-offset)
+                    ref_segment_list.append(i-abs_offset)
                 else:
                     # print(f'offset: {offset}')
                     # print(f'append {i}')
@@ -100,6 +100,7 @@ class Homologous(object):
 
         ##### debug
         # print(f'ref: {ref_segments}')
+        # print(f'offset: {offset}')
         # score_list = np.array(score_list)
         # histogram, _ = np.histogram(score_list, [0, 5, 10, 15, 20, 25, 30, 35])
         # print(histogram)
