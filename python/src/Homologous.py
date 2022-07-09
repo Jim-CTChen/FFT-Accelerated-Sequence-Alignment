@@ -1,15 +1,22 @@
+from cv2 import threshold
 import numpy as np
+import random
 from Aligner import *
 from HomologousSegmentSet import HomologousSegmentSet
+from config import BLOSUM62, AMINO_ACID_MAPPING
+from tool import random_gen_seq
 
 class Homologous(object):
-    def __init__(self, ref: np.ndarray, qry: np.ndarray, cross_cor, score_system='DOT', threshold=180, n=16, wndw_size=30, l=150):
+    data_type_list = ['DNA', 'RNA', 'PROTEIN']
+    def __init__(self, ref: np.ndarray, qry: np.ndarray, cross_cor, data_type: str='DNA', threshold=180, n=16, wndw_size=30, l=150):
         # assert len(ref) == len(qry)
         assert type(ref) == np.ndarray 
         assert type(qry) == np.ndarray
+        assert data_type in self.data_type_list
 
         self.ref = ref
         self.qry = qry
+        self.data_type = data_type
         self.ref_len = ref.shape[0]
         self.qry_len = qry.shape[0]
         self.cross_cor = cross_cor      # c(k)
@@ -18,20 +25,30 @@ class Homologous(object):
         self.wndw_size = wndw_size      # window size for sliding window
         self.maximum_segment_length = l # maximum length for homologous segment)
     
-    def _get_score(self, ref, qry, mode='DOT'):
+    def _get_score(self, ref: np.ndarray, qry: np.ndarray, mode='DOT'):
         '''
             use different score system to calculate score between ref & qry
             mode: 
                 'SW' for SmithWaterman
-                'DOT' for dot product
+                'DOT' for dot product (MAFFT use dot product)
                 default 'DOT'
         '''
+        assert len(ref) == len(qry)
         if mode == 'SW':
             SW = Aligner(ref, qry, alg='SW')
             return SW.calculate_score()
         elif mode == 'DOT':
-            dot = np.equal(ref, qry)
-            return np.sum(dot)
+            score = 0
+            if self.data_type == 'DNA' or self.data_type == 'RNA':
+                dot = np.equal(ref, qry)
+                score = np.sum(dot)
+            elif self.data_type == 'PROTEIN':
+                for i in range(len(ref)):
+                    # print(f'pair: <{AMINO_ACID_MAPPING[f"{ref[i]}"]}, {AMINO_ACID_MAPPING[f"{qry[i]}"]}>')
+                    s = BLOSUM62[ref[i]][qry[i]]
+                    # print(f'score: {s}')
+                    score += s
+            return score
         
         return -1
 
@@ -145,3 +162,32 @@ class Homologous(object):
             all_segment_set.append(segment_set)
             
         return total_segments, all_segment_set
+
+
+def test(data_type='DNA'):
+    '''
+        data_type = 'DNA' | 'RNA' | 'PROTEIN'
+    '''
+    ref = random_gen_seq(len=128, data_type=data_type)
+    qry = random_gen_seq(len=128, data_type=data_type)
+    xcorr = np.correlate(ref, qry, "full")
+    threshold = 0 if data_type == 'PROTEIN' else 13
+    stop = False
+    while not stop:
+        h = Homologous(ref, qry, xcorr, data_type=data_type, threshold=threshold, wndw_size=30)
+        total_segments, homologous_segments_set = h.get_all_homologous_segments()
+        if total_segments > 0: stop = True
+    print(f'total_segments: {total_segments}')
+    # print(f'offset: {homologous_segments_set[1].offset}')
+    # print(homologous_segments_set[3].ref_segments)
+    # print(homologous_segments_set[3].qry_segments)
+    ref_seg = homologous_segments_set[3].ref_segments[0]
+    qry_seg = homologous_segments_set[3].qry_segments[0]
+    print(ref[ref_seg[0]:ref_seg[1]])
+    print(qry[qry_seg[0]:qry_seg[1]])
+
+
+if __name__ == '__main__':
+    random.seed(1)
+    test('DNA')
+    test('PROTEIN')
