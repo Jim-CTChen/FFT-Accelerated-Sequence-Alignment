@@ -1,1 +1,4 @@
 data/
+out/
+*.log
+*__pycache__/
