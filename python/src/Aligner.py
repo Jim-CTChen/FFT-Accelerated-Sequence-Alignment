@@ -328,7 +328,7 @@ if __name__ == '__main__':
     print(f'Final reduced score: {reduced_score}')
     print(f'Golden: {ans}')
 
-    test data 4
+    # test data 4
     print('=========== Test 4 ===========')
     L = 8
     t = np.array([1, 2, 3, 4])

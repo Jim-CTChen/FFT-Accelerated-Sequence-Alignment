@@ -21,30 +21,29 @@ T = 2
 C = 3
 G = 4
 
-def plot(mat1, mat2, trace, path, xcorr, seed, txt):
+def plot(mat1, mat2, match, trace_path, xcorr, name, title, bottom_txt):
     # plt.figure(0)
     # plt.imshow(mat1, cmap='hot', interpolation='nearest')
     # plt.figure(1)
-    # plt.scatter(path[:, 0], path[:, 1])
+    # plt.scatter(trace_path[:, 0], trace_path[:, 1])
     # plt.imshow(mat2, cmap='hot', interpolation='nearest')
     # cmap = ListedColormap(['black', 'w'])
-    # plt.matshow(trace==3, cmap=cmap)
+    # plt.matshow(match==3, cmap=cmap)
     # plt.show()
 
 
-    print(f'match: {int(np.sum(trace))}/{int(trace.shape[0]*trace.shape[1])}')
+    print(f'match: {int(np.sum(match))}/{int(match.shape[0]*match.shape[1])}')
     fig, axs = plt.subplots(2,2)
     axs[0, 0].imshow(mat1, cmap='hot', interpolation='nearest')
-    axs[0, 0].scatter(path[:, 0], path[:, 1], s=3)
+    axs[0, 0].scatter(trace_path[:, 0], trace_path[:, 1], s=3)
     axs[0, 1].imshow(mat2, cmap='hot', interpolation='nearest')
     cmap = ListedColormap(['black', 'w'])
-    axs[1, 0].matshow(trace, cmap=cmap)
+    axs[1, 0].matshow(match, cmap=cmap)
     range_of_xcorr = np.max(xcorr)-np.min(xcorr)
     _ = axs[1, 1].hist(xcorr, bins=int(range_of_xcorr))
-    fig.text(.5, .02, txt, ha='center')
-    title = f'seed: {seed}'
+    fig.text(.5, .02, bottom_txt, ha='center')
     fig.text(.5, .9, title, ha='center')
-    plt.savefig(f'../out/fig_{seed}.jpg')
+    plt.savefig(f'../out/fig_{name}.jpg')
     # plt.show()
 
 def read_FASTA(path, mol_type='DNA-RNA'):
@@ -123,7 +122,7 @@ def random_gen_qry(len=None, limit = 512) -> np.ndarray:
         qry.append(random.randint(1, 4))
     return np.array(qry)
 
-def test(seed):
+def test_DNA(seed):
      # np.set_printoptions(suppress=True)
 
     parser = argparse.ArgumentParser()
@@ -225,9 +224,95 @@ def test(seed):
     dp_engine2.traceback()
     path = np.array(dp_engine2.path)
     score = f'myscore/gt: {my_score}/{gt}'
-    plot(reduced_mat, normal_mat, match, path, xcorr=c, seed=seed, txt=score)
+    plot(reduced_mat, normal_mat, match, path, xcorr=c, name=seed, title=f'seed: {seed}', bottom_txt=score)
     return seed, my_score/gt
     
+def test_protein(ref_accession, qry_accession):
+     # np.set_printoptions(suppress=True)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='32')
+    parser.add_argument('--window_size', help='size of sliding window', type=int, default='25')
+    args = parser.parse_args()
+
+    homologous_threshold = args.threshold
+    homologous_window_size = args.window_size
+    
+    FASTA_prefix = '../../data/FASTA/protein/mafft_sample'
+    ref_path = os.path.join(FASTA_prefix, ref_accession)
+    qry_path = os.path.join(FASTA_prefix, qry_accession)
+
+    _, ref = read_FASTA(ref_path, 'PROTEIN')
+    _, qry = read_FASTA(qry_path, 'PROTEIN')
+
+    # pad ref, qry to same length
+    ref_pad, qry_pad = pad_seq(ref, qry)
+
+    L = len(ref_pad) # length for sequences
+
+    # print('XCorr')
+    cor = CrossCorrelation(ref_pad, qry_pad)
+    c = cor.XCorr()
+    
+
+    # print('Find homologous segment')
+    stop = False
+    threshold = homologous_threshold
+    while not stop: # if no segment found, reduce threshold and run again
+        homologous = Homologous(ref, qry, c, threshold=threshold,\
+            wndw_size=homologous_window_size) # use origin sequence
+        total_segments, homologous_segments_set = homologous.get_all_homologous_segments()
+        if total_segments > 0: stop = True
+        else: threshold -= 1
+
+    print(f'Find total {total_segments} homologous segments, threshold = {threshold}')
+    print(f'ref len: {ref.shape[0]}')
+    print(f'qry len: {qry.shape[0]}')
+    print(f'std of c: {np.std(c)}')
+
+    print('Reducing search space...')
+    reducer = ReduceSearchSpace(homologous_segments_set, ref.shape[0], qry.shape[0])
+    key_points = reducer.reduce(verbose=False)
+    for idx, kp in enumerate(key_points):
+        if idx == key_points.shape[0]-1: break
+        next_kp = key_points[idx+1]
+        assert kp[0] <= next_kp[0], f'error, {kp}, {next_kp}'
+        assert kp[1] <= next_kp[1], f'error, {kp}, {next_kp}'
+
+    print('Running reduced DP...')
+    dp_engine = DPEngine(ref, qry, 'SW')
+    my_score = dp_engine.dp_in_reduced_space(key_points)
+
+
+    print('Running normal DP...')
+    dp_engine2 = DPEngine(ref, qry, 'SW')
+    gt = dp_engine2.dp_normal()
+    
+    with open(f'../out/logfile_{ref_accession}_{qry_accession}.txt', 'w') as f:
+        f.write(f'gt score: {gt}\n')
+        f.write(f'reduced score: {my_score}\n\n')
+
+        f.write(f'ref: length = {len(ref)}\n')
+        f.write(np.array2string(ref))
+        f.write('\n\n')
+        
+        f.write(f'qry: length = {len(qry)}\n')
+        f.write(np.array2string(qry))
+        f.write('\n\n')
+
+        f.write(f'keypoints:\n')
+        for k in key_points:
+            f.writelines(str(k))
+    match = np.zeros((len(qry), len(ref)))
+    for i in range(len(qry)):
+        match[i] = (ref == np.full(len(ref), qry[i]))
+    reduced_mat = dp_engine.score_matrix
+    normal_mat = dp_engine2.score_matrix
+    dp_engine2.traceback()
+    path = np.array(dp_engine2.path)
+    score = f'myscore/gt: {my_score}/{gt}'
+    plot(reduced_mat, normal_mat, match, path, xcorr=c, name=f'{ref_accession}_{qry_accession}' ,title=f'{ref_accession} and {qry_accession}, threshold={threshold}', bottom_txt=score)
+    return my_score/gt
 
 def calculate_fft_score(ref:list, qry:list, homologous_threshold, homologous_window_size, homologous_score_system):
     ref_pad, qry_pad = pad_seq(ref, qry)
@@ -356,19 +441,26 @@ def test_read():
     print(description)
     print(test)
 
-def check_len(path):
-    _, seq = read_FASTA(path)
-    print(f'len of seq: {seq.shape[0]}')
 
 if __name__ == '__main__':
-    # prefix = '../../data/FASTA/'
-    # accession = 'OM066777.1'
-    # check_len(os.path.join(prefix, accession))
 
     # main()
     seed = 0
     acc_list = []
-    while len(acc_list) < 20:
-        seed, acc = test(seed)
-        acc_list.append(acc)
-    print(f'avg acc of total {len(acc_list)} sample: {sum(acc_list)/len(acc_list)}')
+
+    # DNA
+    # while len(acc_list) < 20:
+    #     seed, acc = test_DNA(seed)
+    #     acc_list.append(acc)
+    # print(f'avg acc of total {len(acc_list)} sample: {sum(acc_list)/len(acc_list)}')
+
+    # protein
+    ref_accession = 'L15228'
+    qry_accession = 'L21195'
+    test_protein(ref_accession, qry_accession)
+
+    # qry_accession = 'A45229'
+    # test_protein(ref_accession, qry_accession)
+
+    # qry_accession = 'B45229'
+    # test_protein(ref_accession, qry_accession)
