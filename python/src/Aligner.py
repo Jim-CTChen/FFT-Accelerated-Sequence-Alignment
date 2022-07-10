@@ -1,6 +1,8 @@
+from random import random
 import numpy as np
 import matplotlib.pyplot as plt
-from config import NUCLEIC_ACID_MAPPING, AMINO_ACID_MAPPING
+from config import NUCLEIC_ACID_MAPPING, AMINO_ACID_MAPPING, BLOSUM62
+from tool import random_gen_seq
 
 class Aligner(object):
     '''
@@ -10,7 +12,7 @@ class Aligner(object):
     '''
     DUMMY, DELETION, INSERTION, MATCH = range(4)
 
-    def __init__(self, ref: np.ndarray, qry: np.ndarray, alg='SW', mol_type='DNA-RNA'):
+    def __init__(self, ref: np.ndarray, qry: np.ndarray, alg='SW', data_type='DNA-RNA'):
         '''
             parameter:
             ref: np.ndarray, reference sequence
@@ -21,8 +23,8 @@ class Aligner(object):
         assert type(qry) == np.ndarray
         algorithm = ['SW', 'NW']
         assert alg in algorithm
-        mol_types = ['DNA-RNA', 'PROTEIN']
-        assert mol_type in mol_types
+        data_types = ['DNA-RNA', 'PROTEIN']
+        assert data_type in data_types
         
         self.ref = ref # x axis
         self.qry = qry # y axis
@@ -30,12 +32,20 @@ class Aligner(object):
         self.insertion_matrix = np.zeros((len(qry)+1, len(ref)+1)) # pad for, zero border
         self.deletion_matrix  = np.zeros((len(qry)+1, len(ref)+1)) # pad for, zero border
         self.trace_matrix     = np.zeros((len(qry)+1, len(ref)+1)) # pad for, zero border
-        self.match_score = 2
-        self.mismatch_score = -1
-        self.gap_open_penalty = -2
-        self.gap_ext_penalty = -1
+
+        self.match_score = 8
+        self.mismatch_score = -5
+        if data_type == 'DNA-RNA':
+            self.gap_open_penalty = -7
+            self.gap_ext_penalty = -3
+        else:
+            self.gap_open_penalty = -11
+            self.gap_ext_penalty = -1
+
         self.alg = alg
-        self.mapping = NUCLEIC_ACID_MAPPING if mol_type == 'DNA-RNA' else mol_type == AMINO_ACID_MAPPING
+        self.data_type = data_type
+
+        self.mapping = NUCLEIC_ACID_MAPPING if data_type == 'DNA-RNA' else AMINO_ACID_MAPPING
         self.path = []
 
     def _reset_matrix(self):
@@ -76,7 +86,12 @@ class Aligner(object):
                 self.deletion_matrix[i][j] = max(self.deletion_matrix[i][j-1]+self.gap_ext_penalty, self.score_matrix[i][j-1]+self.gap_open_penalty)
                 self.insertion_matrix[i][j]  = max(self.insertion_matrix[i-1][j]+self.gap_ext_penalty, self.score_matrix[i-1][j]+self.gap_open_penalty)
                 # i-1 and j-1 are origin coord (because of padding)
-                w = self.match_score if self.ref[j-1] == self.qry[i-1] else self.mismatch_score
+                
+                w = 0
+                if self.data_type == 'DNA-RNA':
+                    w = self.match_score if self.ref[j-1] == self.qry[i-1] else self.mismatch_score
+                elif self.data_type == 'PROTEIN':
+                    w = BLOSUM62[self.ref[j-1]][self.qry[i-1]]
                 
                 insertion = (self.insertion_matrix[i][j], self.INSERTION)
                 deletion  = (self.deletion_matrix[i][j], self.DELETION)
@@ -160,6 +175,7 @@ class Aligner(object):
         '''
             key_points should be sorted by ascending order
         '''
+        # FIXME: update trace matrix
         # check if key points are sorted by ascending order
         for idx, kp in enumerate(key_points):
             if idx == key_points.shape[0]-1: break
@@ -185,7 +201,12 @@ class Aligner(object):
                     self.insertion_matrix[i][j] = max(self.insertion_matrix[i][j-1]+self.gap_ext_penalty, self.score_matrix[i][j-1]+self.gap_open_penalty)
                     self.deletion_matrix[i][j]  = max(self.deletion_matrix[i-1][j]+self.gap_ext_penalty, self.score_matrix[i-1][j]+self.gap_open_penalty)
                     # i-1 and j-1 are origin coord (because of padding)
-                    w = self.match_score if self.ref[j-1] == self.qry[i-1] else self.mismatch_score
+                    w = 0
+                    if self.data_type == 'DNA-RNA':
+                        w = self.match_score if self.ref[j-1] == self.qry[i-1] else self.mismatch_score
+                    elif self.data_type == 'PROTEIN':
+                        w = BLOSUM62[self.ref[j-1]][self.qry[i-1]]
+
                     if self.alg == 'SW':
                         self.score_matrix[i][j] = max(
                             self.score_matrix[i-1][j-1]+w,
@@ -257,10 +278,10 @@ class Aligner(object):
 if __name__ == '__main__':
     np.set_printoptions(suppress=True)
 
-    # test data 1
+    # test data 1, 109-1 special project data
     print('=========== Test 1 ===========')
-    s1 = np.loadtxt('../../data/109-1_data/s1.dat').flatten()
-    t1 = np.loadtxt('../../data/109-1_data/t1.dat').flatten()
+    s1 = np.loadtxt('../../data/109-1_data/s1.dat').flatten().astype(int)
+    t1 = np.loadtxt('../../data/109-1_data/t1.dat').flatten().astype(int)
     ans = '0x'
     with open('../../data/109-1_data/golden1.dat', 'r') as f:
         ans += f.readline()[:-1]
@@ -268,10 +289,11 @@ if __name__ == '__main__':
     sw = Aligner(s1, t1)
     score = sw.calculate_score()
 
+
     print(f'Final score: {score}')
     print(f'Golden: {ans}')
 
-    # test data 2
+    # test data 2, 109-1 special project data
     print('=========== Test 2 ===========')
     s2 = np.loadtxt('../../data/109-1_data/s2.dat').flatten()
     t2 = np.loadtxt('../../data/109-1_data/t2.dat').flatten()
@@ -285,7 +307,7 @@ if __name__ == '__main__':
     print(f'Final score: {score}')
     print(f'Golden: {ans}')
 
-    # test data 3
+    # test data 3, test reduce scoring
     print('=========== Test 3 ===========')
     L = 4
     t = np.array([1, 2, 3, 4])
@@ -306,8 +328,7 @@ if __name__ == '__main__':
     print(f'Final reduced score: {reduced_score}')
     print(f'Golden: {ans}')
 
-    quit()
-    # test data 4
+    test data 4
     print('=========== Test 4 ===========')
     L = 8
     t = np.array([1, 2, 3, 4])
@@ -334,3 +355,11 @@ if __name__ == '__main__':
     print(f'aligned qry: {qry}')
     print('score matrix:')
     
+    # test data 5, protein
+    
+    ref = random_gen_seq(len=16, data_type='PROTEIN')
+    qry = random_gen_seq(len=16, data_type='PROTEIN')
+    sw = Aligner(ref, qry, data_type='PROTEIN')
+    score = sw.calculate_score()
+    print(f'score: {score}')
+    sw.print_score_matrix()
