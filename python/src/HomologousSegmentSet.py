@@ -13,6 +13,7 @@ class HomologousSegmentSet(object):
         self.ref_segments = segments
         self.score = score
         self.coords = self._segment_to_coord()
+        self.count = len(segments)
     
     def _segment_to_coord(self):
         coord = [
@@ -21,5 +22,6 @@ class HomologousSegmentSet(object):
         ]
         return np.array(coord)
 
-    def segment_set_for_qry(self):
+    @property
+    def qry_segments(self):
         return self.ref_segments - self.offset

@@ -3,6 +3,7 @@ import numpy as np
 import random
 from Aligner import *
 from HomologousSegmentSet import HomologousSegmentSet
+from CrossCorrelation import CrossCorrelation
 from config import BLOSUM62, AMINO_ACID_MAPPING
 from tool import random_gen_seq
 
@@ -170,19 +171,23 @@ def test(data_type='DNA'):
     '''
     ref = random_gen_seq(len=128, data_type=data_type)
     qry = random_gen_seq(len=128, data_type=data_type)
-    xcorr = np.correlate(ref, qry, "full")
+    xcorr = CrossCorrelation(ref, qry)
+    c = xcorr.XCorr()
+
     threshold = 0 if data_type == 'PROTEIN' else 13
     stop = False
     while not stop:
-        h = Homologous(ref, qry, xcorr, data_type=data_type, threshold=threshold, wndw_size=30)
+        h = Homologous(ref, qry, c, data_type=data_type, threshold=threshold, wndw_size=30)
         total_segments, homologous_segments_set = h.get_all_homologous_segments()
         if total_segments > 0: stop = True
     print(f'total_segments: {total_segments}')
-    # print(f'offset: {homologous_segments_set[1].offset}')
-    # print(homologous_segments_set[3].ref_segments)
-    # print(homologous_segments_set[3].qry_segments)
-    ref_seg = homologous_segments_set[3].ref_segments[0]
-    qry_seg = homologous_segments_set[3].qry_segments[0]
+    index = 0
+    while homologous_segments_set[index].count <= 0: index += 1
+    # print(f'offset: {homologous_segments_set[index].offset}')
+    # print(homologous_segments_set[index].ref_segments)
+    # print(homologous_segments_set[index].qry_segments)
+    ref_seg = homologous_segments_set[index].ref_segments[0]
+    qry_seg = homologous_segments_set[index].qry_segments[0]
     print(ref[ref_seg[0]:ref_seg[1]])
     print(qry[qry_seg[0]:qry_seg[1]])
 

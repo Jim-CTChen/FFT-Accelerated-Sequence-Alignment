@@ -21,7 +21,7 @@ T = 2
 C = 3
 G = 4
 
-def plot(mat1, mat2, trace, path, seed):
+def plot(mat1, mat2, trace, path, xcorr, seed, txt):
     # plt.figure(0)
     # plt.imshow(mat1, cmap='hot', interpolation='nearest')
     # plt.figure(1)
@@ -31,14 +31,21 @@ def plot(mat1, mat2, trace, path, seed):
     # plt.matshow(trace==3, cmap=cmap)
     # plt.show()
 
+
+    print(f'match: {int(np.sum(trace))}/{int(trace.shape[0]*trace.shape[1])}')
     fig, axs = plt.subplots(2,2)
     axs[0, 0].imshow(mat1, cmap='hot', interpolation='nearest')
     axs[0, 0].scatter(path[:, 0], path[:, 1], s=3)
     axs[0, 1].imshow(mat2, cmap='hot', interpolation='nearest')
     cmap = ListedColormap(['black', 'w'])
-    axs[1, 0].matshow(trace==3, cmap=cmap)
-    plt.savefig(f'fig_{seed}.jpg')
-    plt.show()
+    axs[1, 0].matshow(trace, cmap=cmap)
+    range_of_xcorr = np.max(xcorr)-np.min(xcorr)
+    _ = axs[1, 1].hist(xcorr, bins=int(range_of_xcorr))
+    fig.text(.5, .02, txt, ha='center')
+    title = f'seed: {seed}'
+    fig.text(.5, .9, title, ha='center')
+    plt.savefig(f'../out/fig_{seed}.jpg')
+    # plt.show()
 
 def read_FASTA(path, mol_type='DNA-RNA'):
     '''
@@ -116,10 +123,8 @@ def random_gen_qry(len=None, limit = 512) -> np.ndarray:
         qry.append(random.randint(1, 4))
     return np.array(qry)
 
-def test():
+def test(seed):
      # np.set_printoptions(suppress=True)
-    seed = 1
-    
 
     parser = argparse.ArgumentParser()
     score_system_choice = ['DOT', 'SW']
@@ -127,7 +132,7 @@ def test():
     parser.add_argument('--ref', help='reference sequence accession', type=str, default="OK413509.1")
     # parser.add_argument('--qry', help='query sequence accession', type=str, default=accession['l_598'])
     parser.add_argument('--score', help='score system for sliding window ', type=str, default='SW', choices=score_system_choice)
-    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='15')
+    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='12')
     parser.add_argument('--window_size', help='size of sliding window', type=int, default='25')
     args = parser.parse_args()
 
@@ -145,9 +150,9 @@ def test():
     # _, qry = read_FASTA(qry_path)
     stop = False
     while not stop:
-        seed += 1
         print(f'seed: {seed}')
         random.seed(seed)
+        seed += 1
         qry = random_gen_qry(len=256,limit=len(ref))
         # acc_score = calculate_acc_score(ref, qry)
         # print(f'NW score: {acc_score}')
@@ -172,12 +177,9 @@ def test():
     print(f'ref len: {ref.shape[0]}')
     print(f'qry len: {qry.shape[0]}')
     print(f'std of c: {np.std(c)}')
-    print(f'seed: {seed}')
 
     if total_segments != 0:
-        # range_of_xcorr = np.max(c)-np.min(c)
-        # _ = plt.hist(c, bins=int(range_of_xcorr))
-        # plt.show()
+        
         print('Reducing search space...')
         reducer = ReduceSearchSpace(homologous_segments_set, ref.shape[0], qry.shape[0])
         key_points = reducer.reduce(verbose=False)
@@ -198,27 +200,33 @@ def test():
     print('Running normal DP...')
     dp_engine2 = DPEngine(ref, qry, 'SW')
     gt = dp_engine2.dp_normal()
+    print(f'seed: {seed}')
     
-    with open(f'logfile_{seed}.txt', 'w') as f:
+    with open(f'../out/logfile_{seed}.txt', 'w') as f:
+        f.write(f'gt score: {gt}\n')
+        f.write(f'reduced score: {my_score}\n\n')
+
         f.write(f'ref: length = {len(ref)}\n')
         f.write(np.array2string(ref))
         f.write('\n\n')
         
-        f.write(f'qry: length = {len(qry)}\n')
+        f.write(f'../out/qry: length = {len(qry)}\n')
         f.write(np.array2string(qry))
         f.write('\n\n')
 
-        f.write(f'gt score: {gt}\n')
-        f.write(f'reduced score: {my_score}\n\n')
         f.write(f'keypoints:\n')
         for k in key_points:
             f.writelines(str(k))
+    match = np.zeros((len(qry), len(ref)))
+    for i in range(len(qry)):
+        match[i] = (ref == np.full(len(ref), qry[i]))
     reduced_mat = dp_engine.score_matrix
     normal_mat = dp_engine2.score_matrix
     dp_engine2.traceback()
     path = np.array(dp_engine2.path)
-    trace = dp_engine2.trace_matrix
-    plot(reduced_mat, normal_mat, trace, path, seed=seed)
+    score = f'myscore/gt: {my_score}/{gt}'
+    plot(reduced_mat, normal_mat, match, path, xcorr=c, seed=seed, txt=score)
+    return seed, my_score/gt
     
 
 def calculate_fft_score(ref:list, qry:list, homologous_threshold, homologous_window_size, homologous_score_system):
@@ -358,4 +366,9 @@ if __name__ == '__main__':
     # check_len(os.path.join(prefix, accession))
 
     # main()
-    test()
+    seed = 0
+    acc_list = []
+    while len(acc_list) < 20:
+        seed, acc = test(seed)
+        acc_list.append(acc)
+    print(f'avg acc of total {len(acc_list)} sample: {sum(acc_list)/len(acc_list)}')
