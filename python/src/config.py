@@ -1,3 +1,6 @@
+DATA_TYPES = ['DNA', 'RNA', 'PROTEIN']
+ALGORITHMS = ['SW', 'NW']
+
 NUCLEIC_ACID = {
   '-': 0,
   'A': 1,

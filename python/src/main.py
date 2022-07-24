@@ -3,7 +3,7 @@ import random
 
 import numpy as np
 import argparse
-from datetime import datetime
+import datetime
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 
@@ -12,8 +12,9 @@ from CrossCorrelation import CrossCorrelation
 from ReduceSearchSpace import ReduceSearchSpace
 from HomologousSegmentSet import HomologousSegmentSet
 from DynamicProgramming import DPEngine
-from config import NUCLEIC_ACID, AMINO_ACID
+from config import NUCLEIC_ACID, AMINO_ACID, DATA_TYPES, ALGORITHMS
 from Aligner import Aligner
+from tool import random_gen_seq
 
 Z = 0 # padding
 A = 1
@@ -21,34 +22,39 @@ T = 2
 C = 3
 G = 4
 
-def plot(mat1, mat2, match, trace_path, xcorr, name, title, bottom_txt):
-    # plt.figure(0)
-    # plt.imshow(mat1, cmap='hot', interpolation='nearest')
-    # plt.figure(1)
-    # plt.scatter(trace_path[:, 0], trace_path[:, 1])
-    # plt.imshow(mat2, cmap='hot', interpolation='nearest')
-    # cmap = ListedColormap(['black', 'w'])
-    # plt.matshow(match==3, cmap=cmap)
-    # plt.show()
-
-
-    print(f'match: {int(np.sum(match))}/{int(match.shape[0]*match.shape[1])}')
+def plot_reduced(out_path, reduced_score_mat, score_mat, match, reduced_trace_path, trace_path, xcorr, name, title, bottom_txt, show=False):
+    # print(f'match: {int(np.sum(match))}/{int(match.shape[0]*match.shape[1])}')
     fig, axs = plt.subplots(2,2)
-    axs[0, 0].imshow(mat1, cmap='hot', interpolation='nearest')
-    axs[0, 0].scatter(trace_path[:, 0], trace_path[:, 1], s=3)
-    axs[0, 1].imshow(mat2, cmap='hot', interpolation='nearest')
+    axs[0, 0].imshow(reduced_score_mat, cmap='hot', interpolation='nearest')
+    axs[0, 0].scatter(reduced_trace_path[:, 0], reduced_trace_path[:, 1], s=3)
+    axs[0, 1].imshow(score_mat, cmap='hot')
+    axs[0, 1].scatter(trace_path[:, 0], trace_path[:, 1], s=3)
     cmap = ListedColormap(['black', 'w'])
     axs[1, 0].matshow(match, cmap=cmap)
     range_of_xcorr = np.max(xcorr)-np.min(xcorr)
     _ = axs[1, 1].hist(xcorr, bins=int(range_of_xcorr))
     fig.text(.5, .02, bottom_txt, ha='center')
     fig.text(.5, .9, title, ha='center')
-    plt.savefig(f'../out/fig_{name}.jpg')
-    # plt.show()
+    if show: plt.show()
+    plt.savefig(f'{out_path}/fig_{name}.jpg')
+
+def plot(out_path, score_mat, match, trace_path, xcorr, name, title, bottom_txt, show=False):
+    # print(f'match: {int(np.sum(match))}/{int(match.shape[0]*match.shape[1])}')
+    fig, axs = plt.subplots(2,2)
+    axs[0, 1].imshow(score_mat, cmap='hot')
+    axs[0, 1].scatter(trace_path[:, 0], trace_path[:, 1], s=3)
+    cmap = ListedColormap(['black', 'w'])
+    axs[1, 0].matshow(match, cmap=cmap)
+    range_of_xcorr = np.max(xcorr)-np.min(xcorr)
+    _ = axs[1, 1].hist(xcorr, bins=int(range_of_xcorr))
+    fig.text(.5, .02, bottom_txt, ha='center')
+    fig.text(.5, .9, title, ha='center')
+    if show: plt.show()
+    plt.savefig(f'{out_path}/fig_{name}.jpg')
 
 def read_FASTA(path, mol_type='DNA-RNA'):
     '''
-        read in FASTA format
+        read in FASTA format (single sequnce in one file)
         return description and sequence
         input:
             path (str): path for FASTA file
@@ -84,6 +90,35 @@ def read_FASTA(path, mol_type='DNA-RNA'):
     sequence = np.array(sequence)
     return description, sequence
 
+def read_BBS_tfa(path):
+    '''
+        read BAliBase 3.0 .msf (non-aligned full length sequences .tfa file)
+        return multiple amino sequneces
+    '''
+    symbol = AMINO_ACID
+    sequences = []
+    descriptions = []
+    with open(path, 'r') as f:
+        seq = []
+        while True:
+            line = f.readline()
+            if not line:
+                if len(seq): sequences.append(seq)
+                break
+            elif line[0] == '>':
+                descriptions.append(line[1:-1])
+                if len(seq):
+                    sequences.append(seq)
+                    seq = []
+            else:
+                seq = [*seq, *list(line)[:-1]]
+    for j in range(len(sequences)):
+        seq = sequences[j]
+        for i in range(len(seq)):
+            seq[i] = symbol[seq[i]]
+        sequences[j] = np.array(seq)
+    return descriptions, sequences
+
 def read_sequence(path):
     '''
         read in sequence in 0123 format
@@ -99,28 +134,6 @@ def read_sequence(path):
     # print(sequence.shape)
     # print(sequence)
     return description, sequence
-
-def pad_seq(seq1, seq2):
-    '''
-        pairwise padding to same length
-    '''
-    n = len(seq1)
-    m = len(seq2)
-    l = max(n, m)
-    if n > m:
-        seq2 = np.pad(seq2, (0, n-m), mode='constant')
-    else:
-        seq1 = np.pad(seq1, (0, m-n), mode='constant')
-    
-    return seq1, seq2
-
-def random_gen_qry(len=None, limit = 512) -> np.ndarray:
-    if not len:
-        len = random.randint(128, limit)
-    qry = []
-    for i in range(len):
-        qry.append(random.randint(1, 4))
-    return np.array(qry)
 
 def test_DNA(seed):
      # np.set_printoptions(suppress=True)
@@ -152,17 +165,10 @@ def test_DNA(seed):
         print(f'seed: {seed}')
         random.seed(seed)
         seed += 1
-        qry = random_gen_qry(len=256,limit=len(ref))
-        # acc_score = calculate_acc_score(ref, qry)
-        # print(f'NW score: {acc_score}')
-
-        # pad ref, qry to same length
-        ref_pad, qry_pad = pad_seq(ref, qry)
-
-        L = len(ref_pad) # length for sequences
+        qry = random_gen_seq(len=256)
 
         # print('XCorr')
-        cor = CrossCorrelation(ref_pad, qry_pad)
+        cor = CrossCorrelation(ref, qry)
         c = cor.XCorr()
         
 
@@ -227,31 +233,16 @@ def test_DNA(seed):
     plot(reduced_mat, normal_mat, match, path, xcorr=c, name=seed, title=f'seed: {seed}', bottom_txt=score)
     return seed, my_score/gt
     
-def test_protein(ref_accession, qry_accession):
+def test_protein_non_fixed_threshold(ref, qry, ref_serial, qry_serial, args, alg='SW'):
+    '''
+        test on protein
+        reduce threshold if no segment found
+    '''
      # np.set_printoptions(suppress=True)
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='32')
-    parser.add_argument('--window_size', help='size of sliding window', type=int, default='25')
-    args = parser.parse_args()
-
     homologous_threshold = args.threshold
     homologous_window_size = args.window_size
     
-    FASTA_prefix = '../../data/FASTA/protein/mafft_sample'
-    ref_path = os.path.join(FASTA_prefix, ref_accession)
-    qry_path = os.path.join(FASTA_prefix, qry_accession)
-
-    _, ref = read_FASTA(ref_path, 'PROTEIN')
-    _, qry = read_FASTA(qry_path, 'PROTEIN')
-
-    # pad ref, qry to same length
-    ref_pad, qry_pad = pad_seq(ref, qry)
-
-    L = len(ref_pad) # length for sequences
-
-    # print('XCorr')
-    cor = CrossCorrelation(ref_pad, qry_pad)
+    cor = CrossCorrelation(ref, qry)
     c = cor.XCorr()
     
 
@@ -280,17 +271,21 @@ def test_protein(ref_accession, qry_accession):
         assert kp[1] <= next_kp[1], f'error, {kp}, {next_kp}'
 
     print('Running reduced DP...')
-    dp_engine = DPEngine(ref, qry, 'SW')
-    my_score = dp_engine.dp_in_reduced_space(key_points)
-
+    dp_engine = DPEngine(ref, qry, alg=alg)
+    my_score = dp_engine.dp_in_reduced_space(key_points, wndw_size=homologous_window_size)
+    dp_engine.traceback()
+    
 
     print('Running normal DP...')
-    dp_engine2 = DPEngine(ref, qry, 'SW')
+    dp_engine2 = DPEngine(ref, qry, alg=alg)
     gt = dp_engine2.dp_normal()
+    dp_engine2.traceback()
     
-    with open(f'../out/logfile_{ref_accession}_{qry_accession}.txt', 'w') as f:
+    with open(f'../out/logfile_{ref_serial}_{qry_serial}.txt', 'w') as f:
         f.write(f'gt score: {gt}\n')
         f.write(f'reduced score: {my_score}\n\n')
+
+        f.write(f'threshold = {threshold}\n\n')
 
         f.write(f'ref: length = {len(ref)}\n')
         f.write(np.array2string(ref))
@@ -306,110 +301,38 @@ def test_protein(ref_accession, qry_accession):
     match = np.zeros((len(qry), len(ref)))
     for i in range(len(qry)):
         match[i] = (ref == np.full(len(ref), qry[i]))
-    reduced_mat = dp_engine.score_matrix
-    normal_mat = dp_engine2.score_matrix
-    dp_engine2.traceback()
+
+    score_mat = dp_engine2.score_matrix
     path = np.array(dp_engine2.path)
+    reduced_score_mat = dp_engine.score_matrix
+    reduced_path = np.array(dp_engine.path)
     score = f'myscore/gt: {my_score}/{gt}'
-    plot(reduced_mat, normal_mat, match, path, xcorr=c, name=f'{ref_accession}_{qry_accession}' ,title=f'{ref_accession} and {qry_accession}, threshold={threshold}', bottom_txt=score)
-    return my_score/gt
+    plot(reduced_score_mat, score_mat, match, reduced_path, path, xcorr=c, name=f'{ref_serial}_{qry_serial}' ,title=f'{ref_serial} and {qry_serial}, threshold={threshold}', bottom_txt=score)
+    return 1-abs(gt-my_score)/abs(gt)
 
-def calculate_fft_score(ref:list, qry:list, homologous_threshold, homologous_window_size, homologous_score_system):
-    ref_pad, qry_pad = pad_seq(ref, qry)
-    cor = CrossCorrelation(ref_pad, qry_pad)
-    c = cor.XCorr()
-    homologous = Homologous(ref, qry, c, threshold=homologous_threshold,\
-        wndw_size=homologous_window_size, score_system=homologous_score_system)
-
-def calculate_acc_score(ref: np.ndarray, qry: np.ndarray):
-    SW = Aligner(np.array(ref), np.array(qry), alg='NW')
-    score = SW.calculate_score()
-    return score
-
-accession = {
-    'l_336': 'MW820281.1',
-    'l_598': 'OK413509.1',
-    'wuhan': 'NC_045512.2',
-    'variant': 'ON249061.1',
-    'l_2260': 'OM647895.1',
-    'l_2078': 'MQ262985.1',
-    'l_3360': 'OM066777.1',
-}
-
-
-def test_traceback():
-    ref_path = ''
-    qry_path = ''
-    _, ref = read_FASTA('../../data/FASTA/ref')
-    _, qry = read_FASTA('../../data/FASTA/qry')
-
-    nw = Aligner(ref, qry, 'NW')
-    nw.calculate_score()
-    print(f'score matrix:')
-    nw.print_score_matrix()
-    aligned_ref, aligned_qry = nw.traceback()
-    print(f'trace matrix:')
-    nw.print_trace_matrix()
-    print(f'alignment ref: {aligned_ref}')
-    print(f'alignment qry: {aligned_qry}')
-
-def main():
-    # np.set_printoptions(suppress=True)
-    seed = 150000
-    
-
-    parser = argparse.ArgumentParser()
-    score_system_choice = ['DOT', 'SW']
-    # parser.add_argument('--ref', help='reference sequence accession', type=str, default=accession['l_336'])
-    parser.add_argument('--ref', help='reference sequence accession', type=str, default="OK413509.1")
-    # parser.add_argument('--qry', help='query sequence accession', type=str, default=accession['l_598'])
-    parser.add_argument('--score', help='score system for sliding window ', type=str, default='SW', choices=score_system_choice)
-    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='15')
-    parser.add_argument('--window_size', help='size of sliding window', type=int, default='30')
-    args = parser.parse_args()
-
-    homologous_score_system = args.score
+def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
+    '''
+        test on protein
+        fixed threshold
+    '''
     homologous_threshold = args.threshold
     homologous_window_size = args.window_size
+    alg = args.alg
+    buffer = args.buffer
+    data_type = args.data_type
     
-    ref_accession = args.ref
-    # qry_accession = args.qry
-    FASTA_prefix = '../../data/FASTA'
-    ref_path = os.path.join(FASTA_prefix, ref_accession)
-    # qry_path = os.path.join(FASTA_prefix, qry_accession)
+    cor = CrossCorrelation(ref, qry)
+    c = cor.XCorr()
+    
+    threshold = homologous_threshold
+    homologous = Homologous(ref, qry, c, threshold=threshold,\
+        wndw_size=homologous_window_size) # use origin sequence
+    total_segments, homologous_segments_set = homologous.get_all_homologous_segments()
+    
 
-    _, ref = read_FASTA(ref_path)
-    # _, qry = read_FASTA(qry_path)
-    stop = False
-    while not stop:
-        seed += 1
-        random.seed(seed)
-        qry = random_gen_qry(limit=len(ref))
-        # acc_score = calculate_acc_score(ref, qry)
-        # print(f'NW score: {acc_score}')
-
-        # pad ref, qry to same length
-        ref_pad, qry_pad = pad_seq(ref, qry)
-
-        L = len(ref_pad) # length for sequences
-
-        print('XCorr')
-        cor = CrossCorrelation(ref_pad, qry_pad)
-        c = cor.XCorr()
-
-        print('Find homologous segment')
-        homologous = Homologous(ref, qry, c, threshold=homologous_threshold,\
-            wndw_size=homologous_window_size, score_system=homologous_score_system) # use origin sequence
-        total_segments, homologous_segments_set = homologous.get_all_homologous_segments()
-        if total_segments:
-            stop = True
-    print(f'Find total {total_segments} homologous segments')
-    print(f'ref len: {ref.shape[0]}')
-    print(f'qry len: {qry.shape[0]}')
-        
-
-    if total_segments != 0:
-        print('Reducing search space...')
+    if total_segments:
+        print(f'Find total {total_segments} homologous segments!')
+        # print('Reducing search space...')
         reducer = ReduceSearchSpace(homologous_segments_set, ref.shape[0], qry.shape[0])
         key_points = reducer.reduce(verbose=False)
         for idx, kp in enumerate(key_points):
@@ -418,33 +341,176 @@ def main():
             assert kp[0] <= next_kp[0], f'error, {kp}, {next_kp}'
             assert kp[1] <= next_kp[1], f'error, {kp}, {next_kp}'
 
-        print('Running reduced DP...')
-        dp_engine = DPEngine(ref, qry, 'SW')
-        dp_engine.dp_in_reduced_space(key_points)
-
-    else: # no homologous segments found
-        print('No homologous segments found!')
-        print('Run normal DP directly')
-
-    print('Running normal DP...')
-    dp_engine2 = DPEngine(ref, qry, 'SW')
-    dp_engine2.dp_normal()
-
-    reduced_mat = dp_engine.score_matrix()
-    normal_mat = dp_engine2.score_matrix()
-    show_matrix(reduced_mat, normal_mat)
+        # print('Running reduced DP...')
+        dp_engine = DPEngine(ref, qry, alg=alg, data_type=data_type, buffer=buffer)
+        my_score = dp_engine.dp_in_reduced_space(key_points)
+        dp_engine.traceback()
+    else:
+        print('No segments found!')
     
 
+    # print('Running normal DP...')
+    dp_engine2 = DPEngine(ref, qry, alg=alg, data_type=data_type)
+    gt = dp_engine2.dp_normal()
+    dp_engine2.traceback()
+    
+    with open(f'{out_path}/logfile_{ref_serial}_{qry_serial}.txt', 'w') as f:
+        f.write(f'gt score: {gt}\n')
+        if total_segments: f.write(f'reduced score: {my_score}\n\n')
 
-def test_read():
-    description, test = read_FASTA('../../data/FASTA/NC_045512.2')
-    print(description)
-    print(test)
+        f.write(f'threshold = {threshold}\n\n')
+
+        f.write(f'ref: length = {len(ref)}\n')
+        f.write(np.array2string(ref))
+        f.write('\n\n')
+        
+        f.write(f'qry: length = {len(qry)}\n')
+        f.write(np.array2string(qry))
+        f.write('\n\n')
+
+        if total_segments:
+            f.write(f'{total_segments} homologous segments found')
+            f.write(f'keypoints:\n')
+            for k in key_points:
+                f.writelines(str(k))
+        else:
+            f.write('no homologous segment found')
+    match = np.zeros((len(qry), len(ref)))
+    for i in range(len(qry)):
+        match[i] = (ref == np.full(len(ref), qry[i]))
+
+    score_mat = dp_engine2.score_matrix
+    path = np.array(dp_engine2.path)
+    if total_segments:
+        reduced_score_mat = dp_engine.score_matrix
+        reduced_path = np.array(dp_engine.path)
+        score = f'myscore/gt: {my_score}/{gt}'
+        plot_reduced(out_path, reduced_score_mat, score_mat, match, reduced_path, path, xcorr=c, name=f'{ref_serial}_{qry_serial}' ,title=f'{ref_serial} and {qry_serial}, threshold={threshold}', bottom_txt=score, show=False)
+        return True, 1-abs(gt-my_score)/abs(gt)
+    else:
+        reduced_score_mat = None
+        reduced_path = None
+        score = f'gt: {gt}'
+        plot(out_path, score_mat, match, path, xcorr=c, name=f'{ref_serial}_{qry_serial}' ,title=f'{ref_serial} and {qry_serial}, threshold={threshold}', bottom_txt=score, show=False)
+        return False, 1
+
+def test_protein_by_FASTA(ref_accession, qry_accession, args, path_prefix='../../data/FASTA/protein/mafft_sample'):
+    '''
+        run test_protein() by FASTA format
+        input: 
+            ref_accession: ref's accession
+            qry_accession: qry's accession
+            alg: 'SW' | 'NW'
+            path_prefix: path prefix for two FASTA file
+        make sure ref & qry FASTA file is named by accession
+        for example: ref_accession = OK413509.1, then should exist FASTA file {path_prefix}_OK413509.1
+    '''
+    ref_path = os.path.join(path_prefix, ref_accession)
+    qry_path = os.path.join(path_prefix, qry_accession)
+
+    _, ref = read_FASTA(ref_path, 'PROTEIN')
+    _, qry = read_FASTA(qry_path, 'PROTEIN')
+    test_protein(ref, qry, ref_accession, qry_accession, args)
+
+def test_protein_by_TFA(tfa_path, out_path, args):
+    '''
+        run test_protein() by BAliBASE 3.0 .tfa file
+        input: path to .tfa file
+        (
+            only run the first sequence vs others, 
+            i.e. first sequence as ref and others as qrys
+        )
+    '''
+    des, seqs = read_BBS_tfa(tfa_path)
+    ref = seqs[0]
+    ref_serial = des[0]
+    acc_list = []
+    has_segment_count = 0
+    for i in range(1, len(seqs)):
+        qry = seqs[i]
+        qry_serial = des[i]
+        has_segment, acc = test_protein(ref, qry, ref_serial, qry_serial, args, out_path=out_path)
+        if has_segment:
+            has_segment_count += 1
+            acc_list.append(acc)
+    print(f'number of cases have homologous segment: {has_segment_count}')
+    if has_segment_count:
+        print(f'avg acc of total {len(acc_list)} samples which have homologous segment: {sum(acc_list)/len(acc_list)}')
+    with open(f'{out_path}/acc_log.txt', 'w') as f:
+        f.write(str(datetime.datetime.now().date()))
+        f.write('\n\n')
+        f.write(f'.tfa path: {tfa_path}\n\n')
+        f.write('Settings:\n')
+        f.write(f'1. Algorithm: {args.alg}\n')
+        f.write(f'2. Window size: {args.window_size}\n')
+        f.write(f'3. Threshold: {args.threshold}\n')
+        if args.buffer < 1 and args.buffer > 0:
+            f.write(f'4. Buffer for keypoints: ((len(ref)+len(qry))/2) * {args.buffer}\n\n')
+        elif args.buffer > 1:
+            f.write(f'4. Buffer for keypoints: {args.buffer}\n\n')
+        elif args.buffer <= 0:
+            f.write(f'4. Buffer for keypoints: no buffer for keypoints\n\n')
+
+        f.write(f'Number of cases have homologous segment: {has_segment_count}\n')
+        if has_segment_count:
+            f.write(f'avg acc of total {len(acc_list)} samples which have homologous segment: {sum(acc_list)/len(acc_list)}\n\n')
+            f.write('acc list:\n')
+            for acc in acc_list:
+                f.write(str(acc))
+                f.write('\n')
+        
+
+
+def main():
+    pass
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='10')
+    parser.add_argument('--window_size', help='size of sliding window', type=int, default='35')
+    parser.add_argument('--alg', help='NW | SW', choices=ALGORITHMS, type=str, default='SW')
+    parser.add_argument('--buffer', help='buffer around keypoint, < 1 then ratio to avg length, > 1 then exact width', type=float, default=0)
+    parser.add_argument('--data_type', help='data type', choices=DATA_TYPES, type=str, default='PROTEIN')
+    args = parser.parse_args()
 
-    # main()
+    show_args = True
+    if show_args:
+        print(f'threshold: {args.threshold}')
+        print(f'window_size: {args.window_size}')
+        print(f'alg: {args.alg}')
+        print(f'buffer: {args.buffer}')
+        print(f'data_type: {args.data_type}')
+
+    tfa_path_prefix = '../../data/bb3_release/RV12'
+    out_path_prefix = '../out/BAliBASE3.0/bbs_RV12_SW/threshold_10_35/no_buffer'
+
+    case_number = 'BB12001'
+    tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
+    out_path = f'{out_path_prefix}/{case_number}'
+    test_protein_by_TFA(tfa_path, out_path, args)
+
+    case_number = 'BB12002'
+    tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
+    out_path = f'{out_path_prefix}/{case_number}'
+    test_protein_by_TFA(tfa_path, out_path, args)
+
+    case_number = 'BB12003'
+    tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
+    out_path = f'{out_path_prefix}/{case_number}'
+    test_protein_by_TFA(tfa_path, out_path, args)
+
+    case_number = 'BB12004'
+    tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
+    out_path = f'{out_path_prefix}/{case_number}'
+    test_protein_by_TFA(tfa_path, out_path, args)
+
+    case_number = 'BB12005'
+    tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
+    out_path = f'{out_path_prefix}/{case_number}'
+    test_protein_by_TFA(tfa_path, out_path, args)
+    quit()
+
     seed = 0
     acc_list = []
 
@@ -457,10 +523,13 @@ if __name__ == '__main__':
     # protein
     ref_accession = 'L15228'
     qry_accession = 'L21195'
-    test_protein(ref_accession, qry_accession)
+    test_protein_by_FASTA(ref_accession, qry_accession, args)
 
-    # qry_accession = 'A45229'
-    # test_protein(ref_accession, qry_accession)
+    qry_accession = 'A45229'
+    test_protein_by_FASTA(ref_accession, qry_accession, args)
 
-    # qry_accession = 'B45229'
-    # test_protein(ref_accession, qry_accession)
+    qry_accession = 'B45229'
+    test_protein_by_FASTA(ref_accession, qry_accession, args)
+
+    qry_accession = 'L21195'
+    test_protein_by_FASTA(ref_accession, qry_accession, args)

@@ -23,10 +23,10 @@ class CrossCorrelation(object):
         assert type(seq2) == np.ndarray
         assert data_type in self.data_type_list
         assert mode in self.mode_list
-        assert len(seq1) == len(seq2)
 
-        self.seq1 = seq1
-        self.seq2 = seq2
+
+        
+        self.seq1, self.seq2 = self._pad_seq(seq1, seq2)
         self.mode = 0
         self.data_type = 0
 
@@ -37,6 +37,20 @@ class CrossCorrelation(object):
         if mode == 'PAIR': self.mode = self.PAIR
         elif mode == 'GROUP': self.mode = self.GROUP
     
+    def _pad_seq(self, seq1, seq2):
+        '''
+            pairwise padding to same length
+        '''
+        n = len(seq1)
+        m = len(seq2)
+        l = max(n, m)
+        if n > m:
+            seq2 = np.pad(seq2, (0, n-m), mode='constant')
+        else:
+            seq1 = np.pad(seq1, (0, m-n), mode='constant')
+        
+        return seq1, seq2
+
     def _seq2freq(self, seq, symbol):
         '''
             Convert nucleicide sequences to frequency sequence
