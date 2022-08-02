@@ -37,6 +37,7 @@ def plot_reduced(out_path, reduced_score_mat, score_mat, match, reduced_trace_pa
     fig.text(.5, .9, title, ha='center')
     if show: plt.show()
     plt.savefig(f'{out_path}/fig_{name}.jpg')
+    plt.close()
 
 def plot(out_path, score_mat, match, trace_path, xcorr, name, title, bottom_txt, show=False):
     # print(f'match: {int(np.sum(match))}/{int(match.shape[0]*match.shape[1])}')
@@ -51,6 +52,7 @@ def plot(out_path, score_mat, match, trace_path, xcorr, name, title, bottom_txt,
     fig.text(.5, .9, title, ha='center')
     if show: plt.show()
     plt.savefig(f'{out_path}/fig_{name}.jpg')
+    plt.close()
 
 def read_FASTA(path, mol_type='DNA-RNA'):
     '''
@@ -314,6 +316,7 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
     '''
         test on protein
         fixed threshold
+        return # of cases which are correct (+- 10% of gt)
     '''
     homologous_threshold = args.threshold
     homologous_window_size = args.window_size
@@ -328,6 +331,7 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
     homologous = Homologous(ref, qry, c, threshold=threshold,\
         wndw_size=homologous_window_size) # use origin sequence
     total_segments, homologous_segments_set = homologous.get_all_homologous_segments()
+
     
 
     if total_segments:
@@ -358,18 +362,15 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
         f.write(f'gt score: {gt}\n')
         if total_segments: f.write(f'reduced score: {my_score}\n\n')
 
-        f.write(f'threshold = {threshold}\n\n')
-
-        f.write(f'ref: length = {len(ref)}\n')
-        f.write(np.array2string(ref))
-        f.write('\n\n')
-        
-        f.write(f'qry: length = {len(qry)}\n')
-        f.write(np.array2string(qry))
-        f.write('\n\n')
-
         if total_segments:
-            f.write(f'{total_segments} homologous segments found')
+            f.write(f'{total_segments} homologous segments found\n')
+            f.write('printing homologous segments set:\n')
+            for i, segment_set in enumerate(homologous_segments_set):
+                f.write(f'set {i}:\n')
+                f.write(f'num of segment in set: {segment_set.count}\n')
+                f.write(f'offset: {segment_set.offset}\n')
+                f.write(f'correlation: {c[segment_set.offset+(len(ref) - 1)]}\n\n')
+            f.write('\n\n')
             f.write(f'keypoints:\n')
             for k in key_points:
                 f.writelines(str(k))
@@ -386,13 +387,13 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
         reduced_path = np.array(dp_engine.path)
         score = f'myscore/gt: {my_score}/{gt}'
         plot_reduced(out_path, reduced_score_mat, score_mat, match, reduced_path, path, xcorr=c, name=f'{ref_serial}_{qry_serial}' ,title=f'{ref_serial} and {qry_serial}, threshold={threshold}', bottom_txt=score, show=False)
-        return True, 1-abs(gt-my_score)/abs(gt)
+        return True, my_score, gt
     else:
         reduced_score_mat = None
         reduced_path = None
         score = f'gt: {gt}'
         plot(out_path, score_mat, match, path, xcorr=c, name=f'{ref_serial}_{qry_serial}' ,title=f'{ref_serial} and {qry_serial}, threshold={threshold}', bottom_txt=score, show=False)
-        return False, 1
+        return False, 1, 1
 
 def test_protein_by_FASTA(ref_accession, qry_accession, args, path_prefix='../../data/FASTA/protein/mafft_sample'):
     '''
@@ -421,20 +422,31 @@ def test_protein_by_TFA(tfa_path, out_path, args):
             i.e. first sequence as ref and others as qrys
         )
     '''
+    print(f'Testing TFA file: {tfa_path}')
     des, seqs = read_BBS_tfa(tfa_path)
-    ref = seqs[0]
-    ref_serial = des[0]
+    
     acc_list = []
     has_segment_count = 0
-    for i in range(1, len(seqs)):
-        qry = seqs[i]
-        qry_serial = des[i]
-        has_segment, acc = test_protein(ref, qry, ref_serial, qry_serial, args, out_path=out_path)
-        if has_segment:
-            has_segment_count += 1
-            acc_list.append(acc)
+    pass_count = 0
+    align_count = 0
+    for j in range(len(seqs)):
+        ref = seqs[j]
+        ref_serial = des[j]
+        for i in range(j+1, len(seqs)):
+            qry = seqs[i]
+            qry_serial = des[i]
+            has_segment, my_score, gt = test_protein(ref, qry, ref_serial, qry_serial, args, out_path=out_path)
+            align_count += 1
+            if has_segment:
+                acc = 1 - (abs(my_score)-abs(gt))/abs(gt)
+                has_segment_count += 1
+                if my_score < gt*1.1 and my_score > gt*0.9: # within +- 10%
+                    pass_count += 1
+                acc_list.append(acc)
     print(f'number of cases have homologous segment: {has_segment_count}')
     if has_segment_count:
+        pass_rate = pass_count/has_segment_count
+        print(f'pass rate = {pass_count}/{has_segment_count} = {pass_rate}')
         print(f'avg acc of total {len(acc_list)} samples which have homologous segment: {sum(acc_list)/len(acc_list)}')
     with open(f'{out_path}/acc_log.txt', 'w') as f:
         f.write(str(datetime.datetime.now().date()))
@@ -454,23 +466,21 @@ def test_protein_by_TFA(tfa_path, out_path, args):
         f.write(f'Number of cases have homologous segment: {has_segment_count}\n')
         if has_segment_count:
             f.write(f'avg acc of total {len(acc_list)} samples which have homologous segment: {sum(acc_list)/len(acc_list)}\n\n')
+            f.write(f'pass rate = {pass_count}/{has_segment_count} = {pass_count/has_segment_count}\n')
             f.write('acc list:\n')
             for acc in acc_list:
                 f.write(str(acc))
                 f.write('\n')
-        
+    
+    return pass_count, has_segment_count, align_count
 
 
 def main():
-    pass
-
-
-if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='10')
     parser.add_argument('--window_size', help='size of sliding window', type=int, default='35')
-    parser.add_argument('--alg', help='NW | SW', choices=ALGORITHMS, type=str, default='SW')
-    parser.add_argument('--buffer', help='buffer around keypoint, < 1 then ratio to avg length, > 1 then exact width', type=float, default=0)
+    parser.add_argument('--alg', help='NW | SW', choices=ALGORITHMS, type=str, default='NW')
+    parser.add_argument('--buffer', help='buffer around keypoint, < 1 then ratio to avg length, > 1 then exact width', type=float, default=10)
     parser.add_argument('--data_type', help='data type', choices=DATA_TYPES, type=str, default='PROTEIN')
     args = parser.parse_args()
 
@@ -482,33 +492,89 @@ if __name__ == '__main__':
         print(f'buffer: {args.buffer}')
         print(f'data_type: {args.data_type}')
 
-    tfa_path_prefix = '../../data/bb3_release/RV12'
-    out_path_prefix = '../out/BAliBASE3.0/bbs_RV12_SW/threshold_10_35/no_buffer'
+    tfa_path_prefix = f'../../data/bb3_release/RV12'
+    out_path_prefix = f'../out/BAliBASE3.0/bbs_RV12_{args.alg}/threshold_{args.threshold}_{args.window_size}/buffer_{args.buffer}'
+    os.system(f'mkdir -p {out_path_prefix}/BB12001')
+    os.system(f'mkdir -p {out_path_prefix}/BB12002')
+    os.system(f'mkdir -p {out_path_prefix}/BB12003')
+    os.system(f'mkdir -p {out_path_prefix}/BB12004')
+    os.system(f'mkdir -p {out_path_prefix}/BB12005')
+
+    # out_path_prefix = '../out'
+    # test_protein_by_TFA(f'{tfa_path_prefix}/BB12002.tfa', out_path_prefix, args)
+    total_pass_count = 0
+    total_has_segment_count = 0
+    total_align_count = 0
 
     case_number = 'BB12001'
     tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
     out_path = f'{out_path_prefix}/{case_number}'
-    test_protein_by_TFA(tfa_path, out_path, args)
+    pass_count, has_segment_count, align_count = test_protein_by_TFA(tfa_path, out_path, args)
+    total_pass_count += pass_count
+    total_has_segment_count += has_segment_count
+    total_align_count += align_count
 
     case_number = 'BB12002'
     tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
     out_path = f'{out_path_prefix}/{case_number}'
-    test_protein_by_TFA(tfa_path, out_path, args)
+    pass_count, has_segment_count, align_count = test_protein_by_TFA(tfa_path, out_path, args)
+    total_pass_count += pass_count
+    total_has_segment_count += has_segment_count
+    total_align_count += align_count
 
     case_number = 'BB12003'
     tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
     out_path = f'{out_path_prefix}/{case_number}'
-    test_protein_by_TFA(tfa_path, out_path, args)
+    pass_count, has_segment_count, align_count = test_protein_by_TFA(tfa_path, out_path, args)
+    total_pass_count += pass_count
+    total_has_segment_count += has_segment_count
+    total_align_count += align_count
 
     case_number = 'BB12004'
     tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
     out_path = f'{out_path_prefix}/{case_number}'
-    test_protein_by_TFA(tfa_path, out_path, args)
+    pass_count, has_segment_count, align_count = test_protein_by_TFA(tfa_path, out_path, args)
+    total_pass_count += pass_count
+    total_has_segment_count += has_segment_count
+    total_align_count += align_count
 
     case_number = 'BB12005'
     tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
     out_path = f'{out_path_prefix}/{case_number}'
-    test_protein_by_TFA(tfa_path, out_path, args)
+    pass_count, has_segment_count, align_count = test_protein_by_TFA(tfa_path, out_path, args)
+    total_pass_count += pass_count
+    total_has_segment_count += has_segment_count
+    total_align_count += align_count
+
+    print(f'segment hit rate = has segment count / align count')
+    print(f'segment hit rate = {total_has_segment_count}/{total_align_count} = {total_has_segment_count/total_align_count}')
+    print(f'pass rate = pass count / has segment count')
+    print(f'pass rate = {total_pass_count}/{total_has_segment_count} = {total_pass_count/total_has_segment_count}')
+    
+    with open(f'{out_path_prefix}/acc_log.txt', 'w') as f:
+        f.write(str(datetime.datetime.now().date()))
+        f.write('\n\n')
+        f.write(f'.tfa path: {tfa_path}\n\n')
+        f.write('Settings:\n')
+        f.write(f'1. Algorithm: {args.alg}\n')
+        f.write(f'2. Window size: {args.window_size}\n')
+        f.write(f'3. Threshold: {args.threshold}\n')
+        if args.buffer < 1 and args.buffer > 0:
+            f.write(f'4. Buffer for keypoints: ((len(ref)+len(qry))/2) * {args.buffer}\n\n')
+        elif args.buffer > 1:
+            f.write(f'4. Buffer for keypoints: {args.buffer}\n\n')
+        elif args.buffer <= 0:
+            f.write(f'4. Buffer for keypoints: no buffer for keypoints\n\n')
+        f.write(f'segment hit rate = has segment count / align count\n')
+        f.write(f'segment hit rate = {total_has_segment_count}/{total_align_count} = {total_has_segment_count/total_align_count}\n')
+        f.write(f'pass rate = pass count / has segment count\n')
+        f.write(f'pass rate = {total_pass_count}/{total_has_segment_count} = {total_pass_count/total_has_segment_count}')
+
+
+if __name__ == '__main__':
+    main()
+
+
     quit()
 
     seed = 0

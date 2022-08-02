@@ -1,19 +1,19 @@
+import enum
 from cv2 import threshold
 import numpy as np
 import random
 from Aligner import *
 from HomologousSegmentSet import HomologousSegmentSet
 from CrossCorrelation import CrossCorrelation
-from config import BLOSUM62, AMINO_ACID_MAPPING
+from config import BLOSUM62, AMINO_ACID_MAPPING, DATA_TYPES
 from tool import random_gen_seq
 
 class Homologous(object):
-    data_type_list = ['DNA', 'RNA', 'PROTEIN']
     def __init__(self, ref: np.ndarray, qry: np.ndarray, cross_cor, data_type: str='DNA', threshold=180, n=16, wndw_size=30, l=150):
         # assert len(ref) == len(qry)
         assert type(ref) == np.ndarray 
         assert type(qry) == np.ndarray
-        assert data_type in self.data_type_list
+        assert data_type in DATA_TYPES
 
         self.ref = ref
         self.qry = qry
@@ -161,7 +161,6 @@ class Homologous(object):
             # save in np 2D array shape = (n, 2)
             segment_set = HomologousSegmentSet(offset, ref_segment_list, score_list)
             all_segment_set.append(segment_set)
-            
         return total_segments, all_segment_set
 
 
