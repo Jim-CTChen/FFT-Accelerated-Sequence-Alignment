@@ -149,18 +149,21 @@ class Homologous(object):
         '''
             return list of HomologousSegmentSet
         '''
+        # print(f'cross correlation: {self.cross_cor}')
         top_offsets = self.cross_cor.argsort()[-self.n:] # get top n of offset (k)
-        # print(f'top offsets score: {self.cross_cor[top_offsets]}')
-        top_offsets -= (len(self.ref) - 1) # change range from (0, 2*l-1) to (-l+1, l-1)
-        # print(f'top offsets: {top_offsets}')
+        print(f'top offsets score: {self.cross_cor[top_offsets]}')
+        L = len(self.ref) if len(self.ref) >= len(self.qry) else len(self.qry)
+        top_offsets -= (L - 1) # change range from (0, 2*l-1) to (-l+1, l-1)
+        print(f'top offset: {top_offsets}')
         all_segment_set = []
         total_segments = 0
         for offset in top_offsets:
             ref_segment_list, score_list = self._get_segment(offset)
             total_segments += ref_segment_list.shape[0]
             # save in np 2D array shape = (n, 2)
-            segment_set = HomologousSegmentSet(offset, ref_segment_list, score_list)
+            segment_set = HomologousSegmentSet(offset, ref_segment_list, score_list, self.cross_cor[offset+L-1])
             all_segment_set.append(segment_set)
+            segment_set.print_info()
         return total_segments, all_segment_set
 
 

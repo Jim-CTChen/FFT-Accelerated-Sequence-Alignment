@@ -23,13 +23,19 @@ C = 3
 G = 4
 
 def plot_reduced(out_path, reduced_score_mat, score_mat, match, reduced_trace_path, trace_path, xcorr, name, title, bottom_txt, show=False):
-    # print(f'match: {int(np.sum(match))}/{int(match.shape[0]*match.shape[1])}')
+
     fig, axs = plt.subplots(2,2)
+
+    # reduced score matrix with trace path
     axs[0, 0].imshow(reduced_score_mat, cmap='hot', interpolation='nearest')
     axs[0, 0].scatter(reduced_trace_path[:, 0], reduced_trace_path[:, 1], s=3)
+
+    # full score matrix with trace path
     axs[0, 1].imshow(score_mat, cmap='hot')
     axs[0, 1].scatter(trace_path[:, 0], trace_path[:, 1], s=3)
     cmap = ListedColormap(['black', 'w'])
+
+    # 
     axs[1, 0].matshow(match, cmap=cmap)
     range_of_xcorr = np.max(xcorr)-np.min(xcorr)
     _ = axs[1, 1].hist(xcorr, bins=int(range_of_xcorr))
@@ -54,26 +60,29 @@ def plot(out_path, score_mat, match, trace_path, xcorr, name, title, bottom_txt,
     plt.savefig(f'{out_path}/fig_{name}.jpg')
     plt.close()
 
-def read_FASTA(path, mol_type='DNA-RNA'):
+def read_FASTA(path, data_type='DNA'):
     '''
         read in FASTA format (single sequnce in one file)
         return description and sequence
         input:
             path (str): path for FASTA file
-            mol_type (str): {'DNA-RNA', 'PROTEIN}
+            data_type (str): {'DNA', 'RNA', 'PROTEIN}
         output:
             description (str): description for sequence
             sequence (np.ndarray): sequence 
     '''
-    mode_list = ['DNA-RNA', 'PROTEIN']
-    if mol_type not in mode_list:
-        raise ValueError
-    
+    if data_type not in DATA_TYPES:
+        print(f'data type {data_type} not valid!')
+        quit()
+
     symbol = None
-    if mol_type == 'DNA-RNA':
+    if data_type == 'DNA' or data_type == 'RNA':
         symbol = NUCLEIC_ACID
-    elif mol_type == 'PROTEIN':
+    elif data_type == 'PROTEIN':
         symbol = AMINO_ACID
+    else:
+        print(f'data type {data_type} not valid!')
+        quit()
 
     sequence = []
     description = None
@@ -316,7 +325,7 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
     '''
         test on protein
         fixed threshold
-        return # of cases which are correct (+- 10% of gt)
+        return has_segment, my_score, gt
     '''
     homologous_threshold = args.threshold
     homologous_window_size = args.window_size
@@ -393,25 +402,25 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
         reduced_path = None
         score = f'gt: {gt}'
         plot(out_path, score_mat, match, path, xcorr=c, name=f'{ref_serial}_{qry_serial}' ,title=f'{ref_serial} and {qry_serial}, threshold={threshold}', bottom_txt=score, show=False)
-        return False, 1, 1
+        return False, gt, gt
 
-def test_protein_by_FASTA(ref_accession, qry_accession, args, path_prefix='../../data/FASTA/protein/mafft_sample'):
+def test_protein_by_FASTA(ref_path, qry_path, args, out_path):
     '''
         run test_protein() by FASTA format
         input: 
-            ref_accession: ref's accession
-            qry_accession: qry's accession
-            alg: 'SW' | 'NW'
-            path_prefix: path prefix for two FASTA file
-        make sure ref & qry FASTA file is named by accession
-        for example: ref_accession = OK413509.1, then should exist FASTA file {path_prefix}_OK413509.1
+            ref_path: reference sequence fasta file path
+            qry_path: query sequence fasta file path
+            args: arguments
+            out_path: path for output files
     '''
-    ref_path = os.path.join(path_prefix, ref_accession)
-    qry_path = os.path.join(path_prefix, qry_accession)
 
-    _, ref = read_FASTA(ref_path, 'PROTEIN')
-    _, qry = read_FASTA(qry_path, 'PROTEIN')
-    test_protein(ref, qry, ref_accession, qry_accession, args)
+    _, ref = read_FASTA(ref_path, args.data_type)
+    _, qry = read_FASTA(qry_path, args.data_type)
+
+    ref_accession = ref_path.split('/')[-1]
+    qry_accession = qry_path.split('/')[-1]
+
+    test_protein(ref, qry, ref_accession, qry_accession, args, out_path=out_path)
 
 def test_protein_by_TFA(tfa_path, out_path, args):
     '''
@@ -475,12 +484,12 @@ def test_protein_by_TFA(tfa_path, out_path, args):
     return pass_count, has_segment_count, align_count
 
 
-def main():
+def tfa_experiment():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='10')
-    parser.add_argument('--window_size', help='size of sliding window', type=int, default='35')
+    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='6')
+    parser.add_argument('--window_size', help='size of sliding window', type=int, default='20')
     parser.add_argument('--alg', help='NW | SW', choices=ALGORITHMS, type=str, default='NW')
-    parser.add_argument('--buffer', help='buffer around keypoint, < 1 then ratio to avg length, > 1 then exact width', type=float, default=10)
+    parser.add_argument('--buffer', help='buffer around keypoint, < 1 then ratio to avg length, > 1 then exact width', type=float, default=16)
     parser.add_argument('--data_type', help='data type', choices=DATA_TYPES, type=str, default='PROTEIN')
     args = parser.parse_args()
 
@@ -500,8 +509,6 @@ def main():
     os.system(f'mkdir -p {out_path_prefix}/BB12004')
     os.system(f'mkdir -p {out_path_prefix}/BB12005')
 
-    # out_path_prefix = '../out'
-    # test_protein_by_TFA(f'{tfa_path_prefix}/BB12002.tfa', out_path_prefix, args)
     total_pass_count = 0
     total_has_segment_count = 0
     total_align_count = 0
@@ -569,6 +576,33 @@ def main():
         f.write(f'segment hit rate = {total_has_segment_count}/{total_align_count} = {total_has_segment_count/total_align_count}\n')
         f.write(f'pass rate = pass count / has segment count\n')
         f.write(f'pass rate = {total_pass_count}/{total_has_segment_count} = {total_pass_count/total_has_segment_count}')
+
+def fasta_experiment():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='10')
+    parser.add_argument('--window_size', help='size of sliding window', type=int, default='35')
+    parser.add_argument('--alg', help='NW | SW', choices=ALGORITHMS, type=str, default='NW')
+    parser.add_argument('--buffer', help='buffer around keypoint, < 1 then ratio to avg length, > 1 then exact width', type=float, default=16)
+    parser.add_argument('--data_type', help='data type', choices=DATA_TYPES, type=str, default='DNA')
+    args = parser.parse_args()
+
+    show_args = True
+    if show_args:
+        print(f'threshold: {args.threshold}')
+        print(f'window_size: {args.window_size}')
+        print(f'alg: {args.alg}')
+        print(f'buffer: {args.buffer}')
+        print(f'data_type: {args.data_type}')
+
+    ref_fasta_file = '../../data/FASTA/qry'
+    qry_fasta_file = '../../data/FASTA/ref'
+    out_path = '../out'
+    test_protein_by_FASTA(ref_fasta_file, qry_fasta_file, args, out_path)
+
+def main():
+    # tfa_experiment()
+    fasta_experiment()
+    pass
 
 
 if __name__ == '__main__':
