@@ -98,7 +98,7 @@ class CrossCorrelation(object):
         c = np.fft.irfft(seq).astype(float)
         return c
 
-    def XCorr(self):
+    def XCorr(self) -> np.ndarray:
         L = max(len(self.seq1), len(self.seq2))
 
         if self.data_type == self.DNA:
@@ -263,6 +263,11 @@ class CrossCorrelation(object):
 
             c_p = (np.roll(c_p, L)[:2*L-1])
             c_v = (np.roll(c_v, L)[:2*L-1])
+
+            # print(f'c_p: {c_p}')
+            # print(f'c_v: {c_v}')
+            # print(f'c: {c_p+c_v}')
+            # print(f'max c: {max(c_p+c_v)}')
 
             gt_seq1_p = self._seq2polarity(self.seq1)
             gt_seq2_p = self._seq2polarity(self.seq2)

@@ -1,17 +1,33 @@
-a = [[0, 30], [30, 60], [45, 75], [75, 105], [111, 141]]
-a = [[0, 30], [15, 45], [30, 60], [45, 75], [75, 105], [111, 141]]
-a = [[1, 31], [12, 42], [13, 43], [31, 61], [61, 91]]
-print(a)
-i = 0
-for i in range(len(a)-1):
-    j = i+1
-    while j < len(a):
-        print(f'(i, j): ({i}, {j})')
-        print(f'a: {a}')
-        if a[i][1] == a[j][0]: # combine
-            a[i][1] = a[j][1]
-            del a[j]
-        else: j += 1
-print(a)
+import numpy as np
+L = 5
+a = np.arange(-L, L+1)
+for i in range(L):
+    value = a[0]
+    a = np.delete(a, 0)
+    if i == 0:
+        a = np.append(a, value)
+    else:
+        a = np.insert(a, -i*2, value)
+print(a[[10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]])
 
-print(a)
+a =31+\
+55+\
+54+\
+83+\
+132+\
+3+\
+96+\
+111+\
+119+\
+111+\
+105+\
+56+\
+32.5+\
+85+\
+124+\
+32+\
+61+\
+84+\
+170+\
+136
+print(a/20)

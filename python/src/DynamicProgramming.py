@@ -13,13 +13,11 @@ class DPEngine(object):
         self.sw = Aligner(ref, qry, alg, data_type, buffer)
 
     def dp_in_reduced_space(self, key_points: np.ndarray) -> int:
-        reduced_score = self.sw.calculate_score_in_reduced_space(key_points)
-        print(f'reduced_score: {reduced_score}')
-        return reduced_score
+        reduced_score, reduced_ratio = self.sw.calculate_score_in_reduced_space(key_points)
+        return reduced_score, reduced_ratio
 
     def dp_normal(self) -> int:
         score = self.sw.calculate_score()
-        print(f'score: {score}')
         return score
 
     def traceback(self):

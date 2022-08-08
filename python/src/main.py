@@ -16,48 +16,83 @@ from config import NUCLEIC_ACID, AMINO_ACID, DATA_TYPES, ALGORITHMS
 from Aligner import Aligner
 from tool import random_gen_seq
 
-Z = 0 # padding
-A = 1
-T = 2
-C = 3
-G = 4
+def print_args(args):
+    print(f'threshold: {args.threshold}')
+    print(f'window_size: {args.window_size}')
+    print(f'alg: {args.alg}')
+    print(f'buffer: {args.buffer}')
+    print(f'data_type: {args.data_type}')
+    print(f'n: {args.n}')
 
-def plot_reduced(out_path, reduced_score_mat, score_mat, match, reduced_trace_path, trace_path, xcorr, name, title, bottom_txt, show=False):
-
-    fig, axs = plt.subplots(2,2)
+def plot_reduced(out_path, reduced_score_mat, score_mat, match, reduced_trace_path, trace_path, xcorr, name, title, bottom_txt, all_segment_sets, show=False):
+    fig, axs = plt.subplots(2,2, dpi=160)
+    (h, w) = score_mat.shape
 
     # reduced score matrix with trace path
     axs[0, 0].imshow(reduced_score_mat, cmap='hot', interpolation='nearest')
-    axs[0, 0].scatter(reduced_trace_path[:, 0], reduced_trace_path[:, 1], s=3)
+    axs[0, 0].scatter(reduced_trace_path[:, 0], reduced_trace_path[:, 1], s=2, c='m')
 
     # full score matrix with trace path
     axs[0, 1].imshow(score_mat, cmap='hot')
-    axs[0, 1].scatter(trace_path[:, 0], trace_path[:, 1], s=3)
-    cmap = ListedColormap(['black', 'w'])
+    axs[0, 1].scatter(trace_path[:, 0], trace_path[:, 1], s=2, c='b')
 
-    # 
-    axs[1, 0].matshow(match, cmap=cmap)
-    range_of_xcorr = np.max(xcorr)-np.min(xcorr)
-    _ = axs[1, 1].hist(xcorr, bins=int(range_of_xcorr))
+    # score map with offset (thickness represents correlation score)
+    axs[1, 0].imshow(score_mat, cmap='hot')
+    axs[1, 0].scatter(trace_path[:, 0], trace_path[:, 1], s=2, c='b')
+    axs[1, 0].scatter(reduced_trace_path[:, 0], reduced_trace_path[:, 1], s=2, c='m')
+    score_list = np.sort(xcorr)[-len(all_segment_sets):]
+    score_range = np.ptp(score_list)
+    score_range = 1 if not score_range else score_range
+    score_min = score_list.min()
+    score_max = score_list.max()
+
+    for homologous_set in all_segment_sets:
+        offset = homologous_set.offset
+        score = homologous_set.correlation_score
+        x, y = None, None
+        if offset >= 0:
+            if offset+h < w:
+                x, y = [offset, offset+h-1], [0, h-1]
+            else:
+                x, y = [offset, w-1], [0, w-offset-1]
+        else:
+            if w-offset < h:
+                x, y = [0, w-1], [-offset, w-offset-1]
+            else:
+                x, y = [0, h+offset-1], [-offset, h-1]
+        # axs[1, 0].plot(x, y, '-g', linewidth=(1+2*(score-score_min)/score_range))
+        axs[1, 0].plot(x, y, '-g', linewidth=(1))
+
+        for coord in homologous_set.coords:
+            x, y = coord
+            axs[1, 0].plot(x, y, 'x', c='k', zorder=10)
+
+
+    # match dot map
+    # cmap = ListedColormap(['black', 'w'])
+    # axs[1, 0].matshow(match, cmap=cmap)
+
+    # cross correlation histogram
+    # range_of_xcorr = np.max(xcorr)-np.min(xcorr)
+    # _ = axs[1, 1].hist(xcorr, bins=int(range_of_xcorr))
     fig.text(.5, .02, bottom_txt, ha='center')
     fig.text(.5, .9, title, ha='center')
     if show: plt.show()
-    plt.savefig(f'{out_path}/fig_{name}.jpg')
+    else: plt.savefig(f'{out_path}/fig_{name}.jpg')
     plt.close()
 
 def plot(out_path, score_mat, match, trace_path, xcorr, name, title, bottom_txt, show=False):
-    # print(f'match: {int(np.sum(match))}/{int(match.shape[0]*match.shape[1])}')
-    fig, axs = plt.subplots(2,2)
+    fig, axs = plt.subplots(2,2, dpi=160)
     axs[0, 1].imshow(score_mat, cmap='hot')
     axs[0, 1].scatter(trace_path[:, 0], trace_path[:, 1], s=3)
     cmap = ListedColormap(['black', 'w'])
     axs[1, 0].matshow(match, cmap=cmap)
     range_of_xcorr = np.max(xcorr)-np.min(xcorr)
-    _ = axs[1, 1].hist(xcorr, bins=int(range_of_xcorr))
+    # _ = axs[1, 1].hist(xcorr, bins=int(range_of_xcorr))
     fig.text(.5, .02, bottom_txt, ha='center')
     fig.text(.5, .9, title, ha='center')
-    if show: plt.show()
-    plt.savefig(f'{out_path}/fig_{name}.jpg')
+    # if show: plt.show()
+    # plt.savefig(f'{out_path}/fig_{name}.jpg')
     plt.close()
 
 def read_FASTA(path, data_type='DNA'):
@@ -186,7 +221,7 @@ def test_DNA(seed):
         # print('Find homologous segment')
         homologous = Homologous(ref, qry, c, threshold=homologous_threshold,\
             wndw_size=homologous_window_size, score_system=homologous_score_system) # use origin sequence
-        total_segments, homologous_segments_set = homologous.get_all_homologous_segments()
+        total_segments, homologous_segments_sets = homologous.get_all_homologous_segments()
         if total_segments:
             stop = True
     print(f'Find total {total_segments} homologous segments')
@@ -197,7 +232,7 @@ def test_DNA(seed):
     if total_segments != 0:
         
         print('Reducing search space...')
-        reducer = ReduceSearchSpace(homologous_segments_set, ref.shape[0], qry.shape[0])
+        reducer = ReduceSearchSpace(homologous_segments_sets, ref.shape[0], qry.shape[0])
         key_points = reducer.reduce(verbose=False)
         for idx, kp in enumerate(key_points):
             if idx == key_points.shape[0]-1: break
@@ -263,7 +298,7 @@ def test_protein_non_fixed_threshold(ref, qry, ref_serial, qry_serial, args, alg
     while not stop: # if no segment found, reduce threshold and run again
         homologous = Homologous(ref, qry, c, threshold=threshold,\
             wndw_size=homologous_window_size) # use origin sequence
-        total_segments, homologous_segments_set = homologous.get_all_homologous_segments()
+        total_segments, homologous_segments_sets = homologous.get_all_homologous_segments()
         if total_segments > 0: stop = True
         else: threshold -= 1
 
@@ -273,7 +308,7 @@ def test_protein_non_fixed_threshold(ref, qry, ref_serial, qry_serial, args, alg
     print(f'std of c: {np.std(c)}')
 
     print('Reducing search space...')
-    reducer = ReduceSearchSpace(homologous_segments_set, ref.shape[0], qry.shape[0])
+    reducer = ReduceSearchSpace(homologous_segments_sets, ref.shape[0], qry.shape[0])
     key_points = reducer.reduce(verbose=False)
     for idx, kp in enumerate(key_points):
         if idx == key_points.shape[0]-1: break
@@ -325,28 +360,29 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
     '''
         test on protein
         fixed threshold
-        return has_segment, my_score, gt
+        return has_segment, my_score, gt, reduced_ratio
     '''
+    debug = False
     homologous_threshold = args.threshold
     homologous_window_size = args.window_size
     alg = args.alg
     buffer = args.buffer
     data_type = args.data_type
+    n = args.n
     
-    cor = CrossCorrelation(ref, qry)
+    cor = CrossCorrelation(ref, qry, data_type=data_type)
     c = cor.XCorr()
     
     threshold = homologous_threshold
     homologous = Homologous(ref, qry, c, threshold=threshold,\
-        wndw_size=homologous_window_size) # use origin sequence
-    total_segments, homologous_segments_set = homologous.get_all_homologous_segments()
-
+        n=n, wndw_size=homologous_window_size) # use origin sequence
+    total_segments, homologous_segments_sets = homologous.get_all_homologous_segments()
     
 
     if total_segments:
-        print(f'Find total {total_segments} homologous segments!')
+        if debug: print(f'Find total {total_segments} homologous segments!')
         # print('Reducing search space...')
-        reducer = ReduceSearchSpace(homologous_segments_set, ref.shape[0], qry.shape[0])
+        reducer = ReduceSearchSpace(homologous_segments_sets, ref.shape[0], qry.shape[0])
         key_points = reducer.reduce(verbose=False)
         for idx, kp in enumerate(key_points):
             if idx == key_points.shape[0]-1: break
@@ -356,10 +392,10 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
 
         # print('Running reduced DP...')
         dp_engine = DPEngine(ref, qry, alg=alg, data_type=data_type, buffer=buffer)
-        my_score = dp_engine.dp_in_reduced_space(key_points)
+        my_score, reduced_ratio = dp_engine.dp_in_reduced_space(key_points)
         dp_engine.traceback()
     else:
-        print('No segments found!')
+        if debug: print('No segments found!')
     
 
     # print('Running normal DP...')
@@ -367,24 +403,26 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
     gt = dp_engine2.dp_normal()
     dp_engine2.traceback()
     
-    with open(f'{out_path}/logfile_{ref_serial}_{qry_serial}.txt', 'w') as f:
-        f.write(f'gt score: {gt}\n')
-        if total_segments: f.write(f'reduced score: {my_score}\n\n')
-
-        if total_segments:
-            f.write(f'{total_segments} homologous segments found\n')
-            f.write('printing homologous segments set:\n')
-            for i, segment_set in enumerate(homologous_segments_set):
-                f.write(f'set {i}:\n')
-                f.write(f'num of segment in set: {segment_set.count}\n')
-                f.write(f'offset: {segment_set.offset}\n')
-                f.write(f'correlation: {c[segment_set.offset+(len(ref) - 1)]}\n\n')
-            f.write('\n\n')
-            f.write(f'keypoints:\n')
-            for k in key_points:
-                f.writelines(str(k))
-        else:
-            f.write('no homologous segment found')
+    if total_segments:
+        with open(f'{out_path}/logfile_{ref_serial}_{qry_serial}.txt', 'w') as f:
+            f.write(f'gt score: {gt}\n')
+            if total_segments: 
+                f.write(f'reduced score: {my_score}\n\n')
+                f.write(f'reduced ratio: {reduced_ratio}')
+                L = max(len(ref), len(qry))
+                f.write(f'{total_segments} homologous segments found\n')
+                f.write('printing homologous segments set:\n')
+                for i, segment_set in enumerate(homologous_segments_sets):
+                    f.write(f'set {i}:\n')
+                    f.write(f'num of segment in set: {segment_set.count}\n')
+                    f.write(f'offset: {segment_set.offset}\n')
+                    f.write(f'correlation: {c[segment_set.offset+(L - 1)]}\n\n')
+                f.write('\n\n')
+                f.write(f'keypoints:\n')
+                for k in key_points:
+                    f.writelines(str(k))
+            else:
+                f.write('no homologous segment found')
     match = np.zeros((len(qry), len(ref)))
     for i in range(len(qry)):
         match[i] = (ref == np.full(len(ref), qry[i]))
@@ -395,14 +433,18 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
         reduced_score_mat = dp_engine.score_matrix
         reduced_path = np.array(dp_engine.path)
         score = f'myscore/gt: {my_score}/{gt}'
-        plot_reduced(out_path, reduced_score_mat, score_mat, match, reduced_path, path, xcorr=c, name=f'{ref_serial}_{qry_serial}' ,title=f'{ref_serial} and {qry_serial}, threshold={threshold}', bottom_txt=score, show=False)
-        return True, my_score, gt
+        plot_reduced(out_path, reduced_score_mat, score_mat, match, reduced_path, path,\
+            xcorr=c, name=f'{ref_serial}_{qry_serial}', \
+            title=f'{ref_serial} and {qry_serial}, threshold={threshold}', \
+            bottom_txt=score, all_segment_sets=homologous_segments_sets, show=args.draw)
+        return True, my_score, gt, reduced_ratio
     else:
         reduced_score_mat = None
         reduced_path = None
         score = f'gt: {gt}'
-        plot(out_path, score_mat, match, path, xcorr=c, name=f'{ref_serial}_{qry_serial}' ,title=f'{ref_serial} and {qry_serial}, threshold={threshold}', bottom_txt=score, show=False)
-        return False, gt, gt
+        plot(out_path, score_mat, match, path, xcorr=c, name=f'{ref_serial}_{qry_serial}',\
+            title=f'{ref_serial} and {qry_serial}, threshold={threshold}', bottom_txt=score, show=args.draw)
+        return False, gt, gt, 0
 
 def test_protein_by_FASTA(ref_path, qry_path, args, out_path):
     '''
@@ -425,11 +467,15 @@ def test_protein_by_FASTA(ref_path, qry_path, args, out_path):
 def test_protein_by_TFA(tfa_path, out_path, args):
     '''
         run test_protein() by BAliBASE 3.0 .tfa file
-        input: path to .tfa file
-        (
-            only run the first sequence vs others, 
-            i.e. first sequence as ref and others as qrys
-        )
+        param:
+            tfa_path(str): path to .tfa file
+            out_path(str): output file path
+            args: arguments
+        output:
+            pass count
+            has segment count
+            total reduced ratio
+            alignment count
     '''
     print(f'Testing TFA file: {tfa_path}')
     des, seqs = read_BBS_tfa(tfa_path)
@@ -438,24 +484,28 @@ def test_protein_by_TFA(tfa_path, out_path, args):
     has_segment_count = 0
     pass_count = 0
     align_count = 0
+    total_reduced_ratio = 0
     for j in range(len(seqs)):
         ref = seqs[j]
         ref_serial = des[j]
         for i in range(j+1, len(seqs)):
             qry = seqs[i]
             qry_serial = des[i]
-            has_segment, my_score, gt = test_protein(ref, qry, ref_serial, qry_serial, args, out_path=out_path)
+            has_segment, my_score, gt, reduced_ratio = test_protein(ref, qry, ref_serial, qry_serial, args, out_path=out_path)
             align_count += 1
+            total_reduced_ratio += reduced_ratio
             if has_segment:
                 acc = 1 - (abs(my_score)-abs(gt))/abs(gt)
                 has_segment_count += 1
                 if my_score < gt*1.1 and my_score > gt*0.9: # within +- 10%
                     pass_count += 1
                 acc_list.append(acc)
+    avg_reduced_ratio_among_all = total_reduced_ratio/align_count
+    avg_reduced_ratio_among_reduced = total_reduced_ratio/has_segment_count
     print(f'number of cases have homologous segment: {has_segment_count}')
     if has_segment_count:
         pass_rate = pass_count/has_segment_count
-        print(f'pass rate = {pass_count}/{has_segment_count} = {pass_rate}')
+        print(f'pass rate = {pass_count}/{has_segment_count} = {pass_rate}%')
         print(f'avg acc of total {len(acc_list)} samples which have homologous segment: {sum(acc_list)/len(acc_list)}')
     with open(f'{out_path}/acc_log.txt', 'w') as f:
         f.write(str(datetime.datetime.now().date()))
@@ -465,6 +515,7 @@ def test_protein_by_TFA(tfa_path, out_path, args):
         f.write(f'1. Algorithm: {args.alg}\n')
         f.write(f'2. Window size: {args.window_size}\n')
         f.write(f'3. Threshold: {args.threshold}\n')
+        f.write(f'4. n: {args.n}\n')
         if args.buffer < 1 and args.buffer > 0:
             f.write(f'4. Buffer for keypoints: ((len(ref)+len(qry))/2) * {args.buffer}\n\n')
         elif args.buffer > 1:
@@ -475,89 +526,54 @@ def test_protein_by_TFA(tfa_path, out_path, args):
         f.write(f'Number of cases have homologous segment: {has_segment_count}\n')
         if has_segment_count:
             f.write(f'avg acc of total {len(acc_list)} samples which have homologous segment: {sum(acc_list)/len(acc_list)}\n\n')
+            f.write(f'segment hit rate = {has_segment_count}/{align_count} = {has_segment_count/align_count}\n')
             f.write(f'pass rate = {pass_count}/{has_segment_count} = {pass_count/has_segment_count}\n')
+            f.write(f'avg reduced ratio among all alignment: {avg_reduced_ratio_among_all}\n')
+            f.write(f'avg reduced ratio among reduced alignment: {avg_reduced_ratio_among_reduced}\n')
             f.write('acc list:\n')
             for acc in acc_list:
                 f.write(str(acc))
                 f.write('\n')
     
-    return pass_count, has_segment_count, align_count
+    return pass_count, has_segment_count, total_reduced_ratio, align_count
 
-
-def tfa_experiment():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='6')
-    parser.add_argument('--window_size', help='size of sliding window', type=int, default='20')
-    parser.add_argument('--alg', help='NW | SW', choices=ALGORITHMS, type=str, default='NW')
-    parser.add_argument('--buffer', help='buffer around keypoint, < 1 then ratio to avg length, > 1 then exact width', type=float, default=16)
-    parser.add_argument('--data_type', help='data type', choices=DATA_TYPES, type=str, default='PROTEIN')
-    args = parser.parse_args()
-
-    show_args = True
-    if show_args:
-        print(f'threshold: {args.threshold}')
-        print(f'window_size: {args.window_size}')
-        print(f'alg: {args.alg}')
-        print(f'buffer: {args.buffer}')
-        print(f'data_type: {args.data_type}')
-
+def tfa_experiment(args):
     tfa_path_prefix = f'../../data/bb3_release/RV12'
-    out_path_prefix = f'../out/BAliBASE3.0/bbs_RV12_{args.alg}/threshold_{args.threshold}_{args.window_size}/buffer_{args.buffer}'
-    os.system(f'mkdir -p {out_path_prefix}/BB12001')
-    os.system(f'mkdir -p {out_path_prefix}/BB12002')
-    os.system(f'mkdir -p {out_path_prefix}/BB12003')
-    os.system(f'mkdir -p {out_path_prefix}/BB12004')
-    os.system(f'mkdir -p {out_path_prefix}/BB12005')
+    out_path_prefix = f'../out/BAliBASE3.0/bbs_RV12_{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}'
 
     total_pass_count = 0
     total_has_segment_count = 0
+    total_reduced_ratio = 0
     total_align_count = 0
 
-    case_number = 'BB12001'
-    tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
-    out_path = f'{out_path_prefix}/{case_number}'
-    pass_count, has_segment_count, align_count = test_protein_by_TFA(tfa_path, out_path, args)
-    total_pass_count += pass_count
-    total_has_segment_count += has_segment_count
-    total_align_count += align_count
+    # run through several test cases
+    test_case_numbers = ['BB12001', 'BB12002', 'BB12003', 'BB12004', 'BB12005', 'BB12006', 'BB12007', 'BB12008']
+    for case_number in test_case_numbers:
+        os.system(f'mkdir -p {out_path_prefix}/{case_number}')
+        tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
+        out_path = f'{out_path_prefix}/{case_number}'
+        pass_count, has_segment_count, reduced_ratio, align_count = test_protein_by_TFA(tfa_path, out_path, args)
+        total_pass_count += pass_count
+        total_has_segment_count += has_segment_count
+        total_reduced_ratio += reduced_ratio
+        total_align_count += align_count
 
-    case_number = 'BB12002'
-    tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
-    out_path = f'{out_path_prefix}/{case_number}'
-    pass_count, has_segment_count, align_count = test_protein_by_TFA(tfa_path, out_path, args)
-    total_pass_count += pass_count
-    total_has_segment_count += has_segment_count
-    total_align_count += align_count
+    # calculate overall metrix
+    avg_pass_rate = total_pass_count/total_has_segment_count
+    avg_hit_rate = total_has_segment_count/total_align_count
+    avg_reduced_ratio_among_all = total_reduced_ratio/total_align_count
+    avg_reduced_ratio_among_reduced = total_reduced_ratio/total_has_segment_count
 
-    case_number = 'BB12003'
-    tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
-    out_path = f'{out_path_prefix}/{case_number}'
-    pass_count, has_segment_count, align_count = test_protein_by_TFA(tfa_path, out_path, args)
-    total_pass_count += pass_count
-    total_has_segment_count += has_segment_count
-    total_align_count += align_count
-
-    case_number = 'BB12004'
-    tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
-    out_path = f'{out_path_prefix}/{case_number}'
-    pass_count, has_segment_count, align_count = test_protein_by_TFA(tfa_path, out_path, args)
-    total_pass_count += pass_count
-    total_has_segment_count += has_segment_count
-    total_align_count += align_count
-
-    case_number = 'BB12005'
-    tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
-    out_path = f'{out_path_prefix}/{case_number}'
-    pass_count, has_segment_count, align_count = test_protein_by_TFA(tfa_path, out_path, args)
-    total_pass_count += pass_count
-    total_has_segment_count += has_segment_count
-    total_align_count += align_count
-
+    print(f'----------------------------------------------------------')
     print(f'segment hit rate = has segment count / align count')
-    print(f'segment hit rate = {total_has_segment_count}/{total_align_count} = {total_has_segment_count/total_align_count}')
+    print(f'segment hit rate = {total_has_segment_count}/{total_align_count} = {avg_hit_rate}')
     print(f'pass rate = pass count / has segment count')
-    print(f'pass rate = {total_pass_count}/{total_has_segment_count} = {total_pass_count/total_has_segment_count}')
+    print(f'pass rate = {total_pass_count}/{total_has_segment_count} = {avg_pass_rate}')
+    print(f'avg reduced ratio among all alignments: {avg_reduced_ratio_among_all}')
+    print(f'avg reduced ratio among reduced alignments: {avg_reduced_ratio_among_reduced}')
+    print(f'----------------------------------------------------------')
     
+    # write log file
     with open(f'{out_path_prefix}/acc_log.txt', 'w') as f:
         f.write(str(datetime.datetime.now().date()))
         f.write('\n\n')
@@ -573,35 +589,44 @@ def tfa_experiment():
         elif args.buffer <= 0:
             f.write(f'4. Buffer for keypoints: no buffer for keypoints\n\n')
         f.write(f'segment hit rate = has segment count / align count\n')
-        f.write(f'segment hit rate = {total_has_segment_count}/{total_align_count} = {total_has_segment_count/total_align_count}\n')
+        f.write(f'segment hit rate = {total_has_segment_count}/{total_align_count} = {avg_hit_rate}\n')
         f.write(f'pass rate = pass count / has segment count\n')
-        f.write(f'pass rate = {total_pass_count}/{total_has_segment_count} = {total_pass_count/total_has_segment_count}')
+        f.write(f'pass rate = {total_pass_count}/{total_has_segment_count} = {avg_pass_rate}\n')
+        f.write(f'avg reduced ratio among all alignments = {avg_reduced_ratio_among_all}\n')
+        f.write(f'avg reduced ratio among reduced alignments = {avg_reduced_ratio_among_reduced}\n')
 
-def fasta_experiment():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='10')
-    parser.add_argument('--window_size', help='size of sliding window', type=int, default='35')
-    parser.add_argument('--alg', help='NW | SW', choices=ALGORITHMS, type=str, default='NW')
-    parser.add_argument('--buffer', help='buffer around keypoint, < 1 then ratio to avg length, > 1 then exact width', type=float, default=16)
-    parser.add_argument('--data_type', help='data type', choices=DATA_TYPES, type=str, default='DNA')
-    args = parser.parse_args()
-
-    show_args = True
-    if show_args:
-        print(f'threshold: {args.threshold}')
-        print(f'window_size: {args.window_size}')
-        print(f'alg: {args.alg}')
-        print(f'buffer: {args.buffer}')
-        print(f'data_type: {args.data_type}')
-
-    ref_fasta_file = '../../data/FASTA/qry'
-    qry_fasta_file = '../../data/FASTA/ref'
+def fasta_experiment(args):
+    ref_fasta_file = '../../data/FASTA/ref'
+    ref_fasta_file = '../../data/FASTA/protein/BBS/1ivy_A'
+    ref_fasta_file = '../../data/FASTA/protein/BBS/1ysc_'
+    qry_fasta_file = '../../data/FASTA/qry'
+    qry_fasta_file = '../../data/FASTA/protein/BBS/RL1_BUCAP'
+    qry_fasta_file = '../../data/FASTA/protein/BBS/CPVL_HUMAN'
+    qry_fasta_file = '../../data/FASTA/protein/BBS/RISC_HUMAN'
+    qry_fasta_file = '../../data/FASTA/protein/BBS/NF31_NAEFO'
     out_path = '../out'
     test_protein_by_FASTA(ref_fasta_file, qry_fasta_file, args, out_path)
 
 def main():
-    # tfa_experiment()
-    fasta_experiment()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='3')
+    parser.add_argument('--window_size', help='size of sliding window', type=int, default='16')
+    parser.add_argument('--alg', help='NW | SW', choices=ALGORITHMS, type=str, default='NW')
+    parser.add_argument('--buffer', help='buffer around keypoint, < 1 then ratio to avg length, > 1 then exact width', type=float, default=32)
+    parser.add_argument('--data_type', help='data type', choices=DATA_TYPES, type=str, default='PROTEIN')
+    parser.add_argument('--n', help='choose n top offset for searching', type=int, default=4)
+    parser.add_argument('--draw', help='draw plot or save plot', type=bool, default=False)
+    parser.add_argument('--pair', help='run pair alignment', type=bool, default=False)
+    args = parser.parse_args()
+
+    show_args = True
+    if show_args:
+        print_args(args)
+
+    if args.pair:
+        fasta_experiment(args)
+    else:
+        tfa_experiment(args)
     pass
 
 

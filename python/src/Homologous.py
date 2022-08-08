@@ -17,6 +17,7 @@ class Homologous(object):
 
         self.ref = ref
         self.qry = qry
+        self.L = max(len(ref), len(qry))
         self.data_type = data_type
         self.ref_len = ref.shape[0]
         self.qry_len = qry.shape[0]
@@ -145,25 +146,40 @@ class Homologous(object):
         
         return ref_segments, score_list
 
+    def _zigzag(self, arr):
+        for i in range(self.L-1):
+            value = arr[0]
+            arr = np.delete(arr, 0)
+            if i == 0:
+                arr = np.append(arr, value)
+            else:
+                arr = np.insert(arr, -i*2, value)
+        return arr
+
+    def _get_top_offsets(self):
+        offset = self._zigzag(np.arange(-self.L+1, self.L))
+        xcross = self._zigzag(self.cross_cor)
+        offset = offset[xcross.argsort()[-self.n:]]
+
+        # offset = self.cross_cor.argsort()[-self.n:] # get top n of offset (k)
+        # offset -= (self.L - 1)
+        return offset
+        
     def get_all_homologous_segments(self) -> list:
         '''
-            return list of HomologousSegmentSet
+            return number of segments found & list of HomologousSegmentSet
         '''
-        # print(f'cross correlation: {self.cross_cor}')
-        top_offsets = self.cross_cor.argsort()[-self.n:] # get top n of offset (k)
-        print(f'top offsets score: {self.cross_cor[top_offsets]}')
-        L = len(self.ref) if len(self.ref) >= len(self.qry) else len(self.qry)
-        top_offsets -= (L - 1) # change range from (0, 2*l-1) to (-l+1, l-1)
-        print(f'top offset: {top_offsets}')
+        top_offsets = self._get_top_offsets()
+        
         all_segment_set = []
         total_segments = 0
         for offset in top_offsets:
             ref_segment_list, score_list = self._get_segment(offset)
             total_segments += ref_segment_list.shape[0]
             # save in np 2D array shape = (n, 2)
-            segment_set = HomologousSegmentSet(offset, ref_segment_list, score_list, self.cross_cor[offset+L-1])
+            segment_set = HomologousSegmentSet(offset, ref_segment_list, score_list, self.cross_cor[offset+self.L-1])
             all_segment_set.append(segment_set)
-            segment_set.print_info()
+            # segment_set.print_info()
         return total_segments, all_segment_set
 
 
