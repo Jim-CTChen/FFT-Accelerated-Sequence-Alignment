@@ -17,7 +17,7 @@ class ReduceSearchSpace(object):
         if coord[0] >= current[0] and coord[1] >= current[1]: return False
         else: return True
     
-    def _get_candidate_forward(self, coc:np.ndarray, coc_index:np.ndarray) -> list:
+    def _get_candidate(self, coc:np.ndarray, coc_index:np.ndarray) -> list:
         '''
             get candidates from candidate of candidate (coc)
             input:
@@ -62,7 +62,7 @@ class ReduceSearchSpace(object):
 
         return candidate_list, candidate_index_list
 
-    def reduce_forward(self, verbose=False) -> np.ndarray:
+    def reduce(self, verbose=False) -> np.ndarray:
         '''
             return list of key points
             key_points = [[x, y], ...]
@@ -137,7 +137,7 @@ class ReduceSearchSpace(object):
             print(f'key points: {key_points}')
         return key_points
 
-    def _get_candidate(self, coc:np.ndarray, coc_index:np.ndarray) -> list:
+    def _get_candidate_backward(self, coc:np.ndarray, coc_index:np.ndarray) -> list:
         '''
             get candidates from candidate of candidate (coc)
             input:
@@ -185,7 +185,7 @@ class ReduceSearchSpace(object):
 
         return candidate_list, candidate_index_list
 
-    def reduce(self, verbose=False) -> np.ndarray:
+    def reduce_backward(self, verbose=False) -> np.ndarray:
         '''
             return list of key points
             key_points = [[x, y], ...]
