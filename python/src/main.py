@@ -5,6 +5,7 @@ import numpy as np
 import argparse
 import datetime
 import matplotlib.pyplot as plt
+import copy
 from matplotlib.colors import ListedColormap
 
 from Homologous import Homologous
@@ -25,6 +26,7 @@ def print_args(args):
     print(f'n: {args.n}')
 
 def plot_reduced(out_path, reduced_score_mat, score_mat, match, reduced_trace_path, trace_path, xcorr, name, title, bottom_txt, all_segment_sets, show=False):
+
     fig, axs = plt.subplots(2,2, dpi=160)
     (h, w) = score_mat.shape
 
@@ -73,8 +75,8 @@ def plot_reduced(out_path, reduced_score_mat, score_mat, match, reduced_trace_pa
     # axs[1, 0].matshow(match, cmap=cmap)
 
     # cross correlation histogram
-    # range_of_xcorr = np.max(xcorr)-np.min(xcorr)
-    # _ = axs[1, 1].hist(xcorr, bins=int(range_of_xcorr))
+    top_corr = np.sort(xcorr.astype(np.int32))[-50:]
+    _ = axs[1, 1].hist(top_corr)
     fig.text(.5, .02, bottom_txt, ha='center')
     fig.text(.5, .9, title, ha='center')
     if show: plt.show()
@@ -377,13 +379,14 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
     homologous = Homologous(ref, qry, c, threshold=threshold,\
         n=n, wndw_size=homologous_window_size) # use origin sequence
     total_segments, homologous_segments_sets = homologous.get_all_homologous_segments()
+    all_sets = copy.deepcopy(homologous_segments_sets)
     
 
     if total_segments:
         if debug: print(f'Find total {total_segments} homologous segments!')
         # print('Reducing search space...')
-        reducer = ReduceSearchSpace(homologous_segments_sets, ref.shape[0], qry.shape[0])
-        key_points = reducer.reduce(verbose=False)
+        reducer = ReduceSearchSpace(all_sets, ref.shape[0], qry.shape[0])
+        key_points = reducer.reduce()
         for idx, kp in enumerate(key_points):
             if idx == key_points.shape[0]-1: break
             next_kp = key_points[idx+1]
@@ -539,7 +542,7 @@ def test_protein_by_TFA(tfa_path, out_path, args):
 
 def tfa_experiment(args):
     tfa_path_prefix = f'../../data/bb3_release/RV12'
-    out_path_prefix = f'../out/BAliBASE3.0/bbs_RV12_{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}'
+    out_path_prefix = f'../out/BAliBASE3.0/forward/bbs_RV12_{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}'
 
     total_pass_count = 0
     total_has_segment_count = 0
@@ -599,11 +602,12 @@ def fasta_experiment(args):
     ref_fasta_file = '../../data/FASTA/ref'
     ref_fasta_file = '../../data/FASTA/protein/BBS/1ivy_A'
     ref_fasta_file = '../../data/FASTA/protein/BBS/1ysc_'
+    ref_fasta_file = '../../data/FASTA/protein/BBS/1bmr_'
     qry_fasta_file = '../../data/FASTA/qry'
-    qry_fasta_file = '../../data/FASTA/protein/BBS/RL1_BUCAP'
     qry_fasta_file = '../../data/FASTA/protein/BBS/CPVL_HUMAN'
     qry_fasta_file = '../../data/FASTA/protein/BBS/RISC_HUMAN'
     qry_fasta_file = '../../data/FASTA/protein/BBS/NF31_NAEFO'
+    qry_fasta_file = '../../data/FASTA/protein/BBS/SCX6_CENLL'
     out_path = '../out'
     test_protein_by_FASTA(ref_fasta_file, qry_fasta_file, args, out_path)
 

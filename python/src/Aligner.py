@@ -268,7 +268,7 @@ class Aligner(object):
         elif self.alg == 'NW':
             x, y = self.ref.shape[0], self.qry.shape[0]
 
-        while x != 1 and y != 1:
+        while x > 1 or y > 1:
             if self.alg == 'SW' and not self.score_matrix[y][x]: break
             self.path.append([x, y])
             if self.trace_matrix[y][x] == self.MATCH:

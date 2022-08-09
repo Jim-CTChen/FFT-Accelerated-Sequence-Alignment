@@ -39,6 +39,9 @@ class HomologousSegmentSet(object):
         ]
         return np.array(coord)
 
+    def __len__(self):
+        return len(self.coords)
+
     @property
     def qry_segments(self):
         return self.ref_segments - self.offset

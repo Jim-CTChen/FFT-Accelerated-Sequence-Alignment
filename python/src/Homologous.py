@@ -200,7 +200,7 @@ def test(data_type='DNA'):
         if total_segments > 0: stop = True
     print(f'total_segments: {total_segments}')
     index = 0
-    while homologous_segments_set[index].count <= 0: index += 1
+    while len(homologous_segments_set[index]) <= 0: index += 1
     # print(f'offset: {homologous_segments_set[index].offset}')
     # print(homologous_segments_set[index].ref_segments)
     # print(homologous_segments_set[index].qry_segments)
