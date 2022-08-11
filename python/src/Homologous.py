@@ -27,7 +27,7 @@ class Homologous(object):
         self.wndw_size = wndw_size      # window size for sliding window
         self.maximum_segment_length = l # maximum length for homologous segment)
     
-    def _get_score(self, ref: np.ndarray, qry: np.ndarray, mode='DOT'):
+    def _get_score(self, ref: np.ndarray, qry: np.ndarray, mode='DOT', debug=False):
         '''
             use different score system to calculate score between ref & qry
             mode: 
@@ -43,13 +43,19 @@ class Homologous(object):
             score = 0
             if self.data_type == 'DNA' or self.data_type == 'RNA':
                 dot = np.equal(ref, qry)
+                # if debug: 
+                #     print(f'ref: {ref}')
+                #     print(f'qry: {qry}')
                 score = np.sum(dot)
             elif self.data_type == 'PROTEIN':
                 for i in range(len(ref)):
                     # print(f'pair: <{AMINO_ACID_MAPPING[f"{ref[i]}"]}, {AMINO_ACID_MAPPING[f"{qry[i]}"]}>')
                     s = BLOSUM62[ref[i]][qry[i]]
-                    # print(f'score: {s}')
+                    # if debug:
+                    #     print(f'pair: <{ref[i]}, {qry[i]}>')
+                    #     print(f'score: {s}')
                     score += s
+            # if debug: print(f'score: {score}')
             return score
         
         return -1
@@ -70,20 +76,26 @@ class Homologous(object):
         if verbose:
             print(f'offset: {offset}')
         padded_L = None
+        ref_pad_len = None
+        qry_pad_len = None
         abs_offset = abs(offset)
         if offset < 0: # pad ref left
-            padded_L = max(self.ref_len+abs_offset, self.qry_len) # 598+13
+            L = max(self.ref_len+abs_offset, self.qry_len) # 598+13
+            ref_pad_len = max(L-self.ref_len-abs_offset, 0)
+            qry_pad_len = max(L-self.qry_len, 0)
         else: # pad qry left
-            padded_L = max(self.ref_len, self.qry_len+abs_offset)
+            L = max(self.ref_len, self.qry_len+abs_offset)
+            ref_pad_len = max(L-self.ref_len, 0)
+            qry_pad_len = max(L-self.qry_len-abs_offset, 0)
 
         padded_ref = 0
         padded_qry = 0
         if offset < 0: # pad ref left, qry right
-            padded_ref = np.pad(self.ref, (padded_L-self.ref_len, 0), mode='constant')
-            padded_qry = np.pad(self.qry, (0, padded_L-self.qry_len), mode='constant')
+            padded_ref = np.pad(self.ref, (abs_offset, ref_pad_len), mode='constant')
+            padded_qry = np.pad(self.qry, (0, qry_pad_len), mode='constant')
         else : # pad qry left, ref right
-            padded_ref = np.pad(self.ref, (0, padded_L-self.ref_len), mode='constant')
-            padded_qry = np.pad(self.qry, (padded_L-self.qry_len, 0), mode='constant')
+            padded_ref = np.pad(self.ref, (0, ref_pad_len), mode='constant')
+            padded_qry = np.pad(self.qry, (abs_offset, qry_pad_len), mode='constant')
         
         ref_segment_list = []
         score_list = []
@@ -100,7 +112,17 @@ class Homologous(object):
         # print(f'start: {sliding_wndw_start_idx}')
         # print(f'end: {sliding_wndw_end_idx}')
         for i in range (sliding_wndw_start_idx, sliding_wndw_end_idx):
-            score = self._get_score(padded_ref[i:i+self.wndw_size], padded_qry[i:i+self.wndw_size])
+            debug_ = False
+            # if offset == -241 and i == 241: print(f'sliding at {i}')
+            # if i == 281 and offset == -241: debug_ = True
+            score = self._get_score(padded_ref[i:i+self.wndw_size], padded_qry[i:i+self.wndw_size], debug=debug_)
+            # if debug_:
+            #     print(f'pad index: {i}, {i+self.wndw_size}')
+            #     print(f'pad ref: {padded_ref[i:i+self.wndw_size]}')
+            #     print(f'pad qry: {padded_qry[i:i+self.wndw_size]}')
+            #     print(f'no pad: {i-241}, {i+self.wndw_size-241}')
+            #     print(f'no pad ref: {self.ref[i-241:i+self.wndw_size-241]}')
+            #     print(f'no pad qry: {self.qry[i:i+self.wndw_size]}')
             ##### debug
             # print(score)
             #####

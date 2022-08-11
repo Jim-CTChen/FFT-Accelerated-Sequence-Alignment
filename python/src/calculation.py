@@ -48,6 +48,7 @@ def calculate_polarity_volume_avg_std():
 
 def calculate_xcorr_mean():
   volume = np.array(list(VOLUME_MAPPING.values())) # remove '-'
+  print(volume.sum())
   volume = volume.reshape(-1, 1)
   volume_mat = volume @ volume.T
   volume_match_score = 0
@@ -60,6 +61,7 @@ def calculate_xcorr_mean():
   print(volume_mismatch_mean) # 6342.30735930736
 
   polarity = np.array(list(POLARITY_MAPPING.values())) # remove '-'
+  print(polarity.sum())
   polarity = polarity.reshape(-1, 1)
   polarity_mat = polarity @ polarity.T
   polarity_match_score = 0

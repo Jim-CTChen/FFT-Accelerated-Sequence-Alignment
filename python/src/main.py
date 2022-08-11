@@ -13,9 +13,9 @@ from CrossCorrelation import CrossCorrelation
 from ReduceSearchSpace import ReduceSearchSpace
 from HomologousSegmentSet import HomologousSegmentSet
 from DynamicProgramming import DPEngine
-from config import NUCLEIC_ACID, AMINO_ACID, DATA_TYPES, ALGORITHMS
+from config import NUCLEIC_ACID, AMINO_ACID, DATA_TYPES, ALGORITHMS, BLOSUM62
 from Aligner import Aligner
-from tool import random_gen_seq
+from tool import random_gen_seq, effective_length, eval
 
 def print_args(args):
     print(f'threshold: {args.threshold}')
@@ -358,7 +358,7 @@ def test_protein_non_fixed_threshold(ref, qry, ref_serial, qry_serial, args, alg
     plot(reduced_score_mat, score_mat, match, reduced_path, path, xcorr=c, name=f'{ref_serial}_{qry_serial}' ,title=f'{ref_serial} and {qry_serial}, threshold={threshold}', bottom_txt=score)
     return 1-abs(gt-my_score)/abs(gt)
 
-def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
+def test_protein(ref, qry, ref_serial, qry_serial, args, out_path_prefix, split_pass=False):
     '''
         test on protein
         fixed threshold
@@ -376,7 +376,7 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
     c = cor.XCorr()
     
     threshold = homologous_threshold
-    homologous = Homologous(ref, qry, c, threshold=threshold,\
+    homologous = Homologous(ref, qry, c, threshold=threshold, data_type=data_type,\
         n=n, wndw_size=homologous_window_size) # use origin sequence
     total_segments, homologous_segments_sets = homologous.get_all_homologous_segments()
     all_sets = copy.deepcopy(homologous_segments_sets)
@@ -405,22 +405,46 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
     dp_engine2 = DPEngine(ref, qry, alg=alg, data_type=data_type)
     gt = dp_engine2.dp_normal()
     dp_engine2.traceback()
+
+
     
     if total_segments:
-        with open(f'{out_path}/logfile_{ref_serial}_{qry_serial}.txt', 'w') as f:
+        if split_pass:
+            if eval(my_score, gt): out_path_prefix = f'{out_path_prefix}/pass'
+            else: out_path_prefix = f'{out_path_prefix}/fail'
+
+        with open(f'{out_path_prefix}/logfile_{ref_serial}_{qry_serial}.txt', 'w') as f:
+            f.write(f'ref length: {len(ref)}\n')
+            f.write(f'qry length: {len(qry)}\n')
             f.write(f'gt score: {gt}\n')
             if total_segments: 
                 f.write(f'reduced score: {my_score}\n\n')
                 f.write(f'reduced ratio: {reduced_ratio}')
                 L = max(len(ref), len(qry))
                 f.write(f'{total_segments} homologous segments found\n')
-                f.write('printing homologous segments set:\n')
+                f.write('printing homologous segments set:\n\n')
                 for i, segment_set in enumerate(homologous_segments_sets):
                     f.write(f'set {i}:\n')
                     f.write(f'num of segment in set: {segment_set.count}\n')
                     f.write(f'offset: {segment_set.offset}\n')
-                    f.write(f'correlation: {c[segment_set.offset+(L - 1)]}\n\n')
-                f.write('\n\n')
+                    eff_l = effective_length(segment_set.offset, len(ref), len(qry))
+                    f.write(f'effective length: {eff_l}\n')
+                    f.write(f'correlation: {c[segment_set.offset+(L - 1)]}\n')
+                    f.write(f'printing segment, (coord, score)\n')
+                    for i, coord in enumerate(segment_set.coords):
+                        f.write(f'({coord}, {segment_set.score[i]})  ')
+                    # ref_segment_index_start = segment_set.ref_segments[0][0]
+                    # qry_segment_index_start = segment_set.qry_segments[0][0]
+                    # segment_length = 16
+                    # f.write(f'\nref: {ref[segment_set.ref_segments[0][0]:segment_set.ref_segments[0][1]]}')
+                    # f.write(f'\nqry: {qry[segment_set.qry_segments[0][0]:segment_set.qry_segments[0][1]]}')
+                    # score_list = []
+                    # for i in range(segment_length):
+                    #     score_list.append(BLOSUM62[ref[ref_segment_index_start+i]][qry[qry_segment_index_start+i]])
+                    # score_list = np.array(score_list).astype(np.int32)
+                    # f.write(f'\nsco: {score_list}')
+                    f.write('\n\n')
+                f.write('\n')
                 f.write(f'keypoints:\n')
                 for k in key_points:
                     f.writelines(str(k))
@@ -436,7 +460,7 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
         reduced_score_mat = dp_engine.score_matrix
         reduced_path = np.array(dp_engine.path)
         score = f'myscore/gt: {my_score}/{gt}'
-        plot_reduced(out_path, reduced_score_mat, score_mat, match, reduced_path, path,\
+        plot_reduced(out_path_prefix, reduced_score_mat, score_mat, match, reduced_path, path,\
             xcorr=c, name=f'{ref_serial}_{qry_serial}', \
             title=f'{ref_serial} and {qry_serial}, threshold={threshold}', \
             bottom_txt=score, all_segment_sets=homologous_segments_sets, show=args.draw)
@@ -445,7 +469,7 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path):
         reduced_score_mat = None
         reduced_path = None
         score = f'gt: {gt}'
-        plot(out_path, score_mat, match, path, xcorr=c, name=f'{ref_serial}_{qry_serial}',\
+        plot(out_path_prefix, score_mat, match, path, xcorr=c, name=f'{ref_serial}_{qry_serial}',\
             title=f'{ref_serial} and {qry_serial}, threshold={threshold}', bottom_txt=score, show=args.draw)
         return False, gt, gt, 0
 
@@ -465,7 +489,7 @@ def test_protein_by_FASTA(ref_path, qry_path, args, out_path):
     ref_accession = ref_path.split('/')[-1]
     qry_accession = qry_path.split('/')[-1]
 
-    test_protein(ref, qry, ref_accession, qry_accession, args, out_path=out_path)
+    test_protein(ref, qry, ref_accession, qry_accession, args, out_path)
 
 def test_protein_by_TFA(tfa_path, out_path, args):
     '''
@@ -494,7 +518,7 @@ def test_protein_by_TFA(tfa_path, out_path, args):
         for i in range(j+1, len(seqs)):
             qry = seqs[i]
             qry_serial = des[i]
-            has_segment, my_score, gt, reduced_ratio = test_protein(ref, qry, ref_serial, qry_serial, args, out_path=out_path)
+            has_segment, my_score, gt, reduced_ratio = test_protein(ref, qry, ref_serial, qry_serial, args, out_path, split_pass=True)
             align_count += 1
             total_reduced_ratio += reduced_ratio
             if has_segment:
@@ -542,7 +566,8 @@ def test_protein_by_TFA(tfa_path, out_path, args):
 
 def tfa_experiment(args):
     tfa_path_prefix = f'../../data/bb3_release/RV12'
-    out_path_prefix = f'../out/BAliBASE3.0/forward/bbs_RV12_{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}'
+    out_path_prefix = f'../out/BAliBASE3.0/new/bbs_RV12_{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}'
+    print(f'writing to {out_path_prefix}')
 
     total_pass_count = 0
     total_has_segment_count = 0
@@ -552,7 +577,8 @@ def tfa_experiment(args):
     # run through several test cases
     test_case_numbers = ['BB12001', 'BB12002', 'BB12003', 'BB12004', 'BB12005', 'BB12006', 'BB12007', 'BB12008']
     for case_number in test_case_numbers:
-        os.system(f'mkdir -p {out_path_prefix}/{case_number}')
+        os.system(f'mkdir -p {out_path_prefix}/{case_number}/pass')
+        os.system(f'mkdir -p {out_path_prefix}/{case_number}/fail')
         tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
         out_path = f'{out_path_prefix}/{case_number}'
         pass_count, has_segment_count, reduced_ratio, align_count = test_protein_by_TFA(tfa_path, out_path, args)
@@ -600,14 +626,19 @@ def tfa_experiment(args):
 
 def fasta_experiment(args):
     ref_fasta_file = '../../data/FASTA/ref'
+    ref_fasta_file = '../../data/FASTA/protein/BBS/1bmr_'
+    ref_fasta_file = '../../data/FASTA/protein/BBS/1ac5_'
     ref_fasta_file = '../../data/FASTA/protein/BBS/1ivy_A'
     ref_fasta_file = '../../data/FASTA/protein/BBS/1ysc_'
-    ref_fasta_file = '../../data/FASTA/protein/BBS/1bmr_'
+    ref_fasta_file = '../../data/FASTA/protein/BBS/1buc_A'
     qry_fasta_file = '../../data/FASTA/qry'
+    qry_fasta_file = '../../data/FASTA/protein/BBS/NF31_NAEFO'
+    qry_fasta_file = '../../data/FASTA/protein/BBS/SCX6_CENLL'
     qry_fasta_file = '../../data/FASTA/protein/BBS/CPVL_HUMAN'
     qry_fasta_file = '../../data/FASTA/protein/BBS/RISC_HUMAN'
     qry_fasta_file = '../../data/FASTA/protein/BBS/NF31_NAEFO'
-    qry_fasta_file = '../../data/FASTA/protein/BBS/SCX6_CENLL'
+    qry_fasta_file = '../../data/FASTA/protein/BBS/1r2j_A'
+    qry_fasta_file = '../../data/FASTA/protein/BBS/Q8jzn5'
     out_path = '../out'
     test_protein_by_FASTA(ref_fasta_file, qry_fasta_file, args, out_path)
 

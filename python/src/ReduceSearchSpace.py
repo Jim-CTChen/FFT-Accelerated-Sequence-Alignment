@@ -14,7 +14,7 @@ class ReduceSearchSpace(object):
         self.qry_len = qry_len
     
     def _out_of_range(self, coord, current) -> bool:
-        if coord[0] >= current[0] and coord[1] >= current[1]: return False
+        if coord[0] > current[0] and coord[1] > current[1]: return False
         else: return True
     
     def _get_candidate(self, coc:np.ndarray, coc_index:np.ndarray) -> list:

@@ -25,3 +25,18 @@ def random_gen_seq(len=None, lower_bound = 16, upper_bound = 512, data_type='DNA
             seq.append(amino_acid[random.randint(0, 19)])
 
     return np.array(seq)
+
+def effective_length(offset, ref_len, qry_len):
+    '''
+        calculate effective length for specific offset
+    '''
+    eff_l = None
+    if offset > 0:
+        eff_l = min(ref_len-offset, qry_len)
+    else:
+        eff_l = min(qry_len+offset, ref_len)
+    return eff_l
+
+def eval(score, gt, tolerance=0.1):
+    diff = abs(score-gt)
+    return diff < gt*tolerance

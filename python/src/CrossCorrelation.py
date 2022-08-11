@@ -280,7 +280,8 @@ class CrossCorrelation(object):
             assert np.sum(c_p-gt_p)/len(c_p) < 1 # tolerate some minor error
             assert np.sum(c_v-gt_v)/len(c_v) < 1 # tolerate some minor error
 
-            return c_p+c_v
+            # return 100*c_p+c_v
+            return c_v
 
 
 # def random_gen_seq(len=None, lower_bound = 16, upper_bound = 512, data_type='DNA') -> np.ndarray:
