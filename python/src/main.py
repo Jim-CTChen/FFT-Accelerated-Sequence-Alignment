@@ -371,8 +371,9 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path_prefix, split_
     buffer = args.buffer
     data_type = args.data_type
     n = args.n
+    use_polarity = args.use_polarity
     
-    cor = CrossCorrelation(ref, qry, data_type=data_type)
+    cor = CrossCorrelation(ref, qry, data_type=data_type, use_polarity=use_polarity)
     c = cor.XCorr()
     
     threshold = homologous_threshold
@@ -513,6 +514,7 @@ def test_protein_by_TFA(tfa_path, out_path, args):
     align_count = 0
     total_reduced_ratio = 0
     for j in range(len(seqs)):
+        if align_count > 105: break # break if too much sequences in one tfa file
         ref = seqs[j]
         ref_serial = des[j]
         for i in range(j+1, len(seqs)):
@@ -527,10 +529,12 @@ def test_protein_by_TFA(tfa_path, out_path, args):
                 if my_score < gt*1.1 and my_score > gt*0.9: # within +- 10%
                     pass_count += 1
                 acc_list.append(acc)
-    avg_reduced_ratio_among_all = total_reduced_ratio/align_count
-    avg_reduced_ratio_among_reduced = total_reduced_ratio/has_segment_count
     print(f'number of cases have homologous segment: {has_segment_count}')
+    avg_reduced_ratio_among_all = 0
+    avg_reduced_ratio_among_reduced = 0
     if has_segment_count:
+        avg_reduced_ratio_among_all = total_reduced_ratio/align_count
+        avg_reduced_ratio_among_reduced = total_reduced_ratio/has_segment_count
         pass_rate = pass_count/has_segment_count
         print(f'pass rate = {pass_count}/{has_segment_count} = {pass_rate}%')
         print(f'avg acc of total {len(acc_list)} samples which have homologous segment: {sum(acc_list)/len(acc_list)}')
@@ -565,8 +569,9 @@ def test_protein_by_TFA(tfa_path, out_path, args):
     return pass_count, has_segment_count, total_reduced_ratio, align_count
 
 def tfa_experiment(args):
-    tfa_path_prefix = f'../../data/bb3_release/RV12'
-    out_path_prefix = f'../out/BAliBASE3.0/new/bbs_RV12_{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}'
+    data_set = str(args.data_set)
+    tfa_path_prefix = f'../../data/bb3_release/RV{data_set}'
+    out_path_prefix = f'../out/BAliBASE3.0/new/bbs_RV{data_set}_{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}'
     print(f'writing to {out_path_prefix}')
 
     total_pass_count = 0
@@ -575,8 +580,12 @@ def tfa_experiment(args):
     total_align_count = 0
 
     # run through several test cases
-    test_case_numbers = ['BB12001', 'BB12002', 'BB12003', 'BB12004', 'BB12005', 'BB12006', 'BB12007', 'BB12008']
-    for case_number in test_case_numbers:
+    test_case_numbers = ['001', '002', '003', '004', '005', '006', '007', '008']
+    test_cases = [f'BB{data_set}{n}' for n in test_case_numbers]
+    # test_cases = ['BB12001', 'BB12002', 'BB12003', 'BB12004', 'BB12005', 'BB12006', 'BB12007', 'BB12008']
+    # test_cases = ['BB11001', 'BB11002', 'BB11003', 'BB11004', 'BB11005', 'BB11006', 'BB11007', 'BB11008']
+    # test_cases = ['BB20001', 'BB20002', 'BB20007', 'BB20011', 'BB20012', 'BB20017', 'BB20020', 'BB20029']
+    for case_number in test_cases:
         os.system(f'mkdir -p {out_path_prefix}/{case_number}/pass')
         os.system(f'mkdir -p {out_path_prefix}/{case_number}/fail')
         tfa_path = f'{tfa_path_prefix}/{case_number}.tfa'
@@ -606,17 +615,24 @@ def tfa_experiment(args):
     with open(f'{out_path_prefix}/acc_log.txt', 'w') as f:
         f.write(str(datetime.datetime.now().date()))
         f.write('\n\n')
-        f.write(f'.tfa path: {tfa_path}\n\n')
+        f.write(f'Dataset: RV{args.data_set}\n')
+        f.write('\n')
+
         f.write('Settings:\n')
         f.write(f'1. Algorithm: {args.alg}\n')
         f.write(f'2. Window size: {args.window_size}\n')
         f.write(f'3. Threshold: {args.threshold}\n')
         if args.buffer < 1 and args.buffer > 0:
-            f.write(f'4. Buffer for keypoints: ((len(ref)+len(qry))/2) * {args.buffer}\n\n')
+            f.write(f'4. Buffer for keypoints: ((len(ref)+len(qry))/2) * {args.buffer}\n')
         elif args.buffer > 1:
-            f.write(f'4. Buffer for keypoints: {args.buffer}\n\n')
+            f.write(f'4. Buffer for keypoints: {args.buffer}\n')
         elif args.buffer <= 0:
-            f.write(f'4. Buffer for keypoints: no buffer for keypoints\n\n')
+            f.write(f'4. Buffer for keypoints: no buffer for keypoints\n')
+        
+        f.write(f'5. n: {args.n}\n')
+        f.write(f'6. Use polarity for xcorr: {args.use_polarity}\n')
+        f.write(f'\n')
+
         f.write(f'segment hit rate = has segment count / align count\n')
         f.write(f'segment hit rate = {total_has_segment_count}/{total_align_count} = {avg_hit_rate}\n')
         f.write(f'pass rate = pass count / has segment count\n')
@@ -652,6 +668,8 @@ def main():
     parser.add_argument('--n', help='choose n top offset for searching', type=int, default=4)
     parser.add_argument('--draw', help='draw plot or save plot', type=bool, default=False)
     parser.add_argument('--pair', help='run pair alignment', type=bool, default=False)
+    parser.add_argument('--data_set', help='BAliBASE dataset number. e.g. 12 for RV12', type=int, default=12)
+    parser.add_argument('--use_polarity', help='use polarity for xcorr as well', type=bool, default=False)
     args = parser.parse_args()
 
     show_args = True

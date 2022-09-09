@@ -10,32 +10,24 @@ class CrossCorrelation(object):
     RNA = 1
     PROTEIN = 2
 
-    # mode
-    mode_list = ['pair', 'group']
-    PAIR_MODE = 0
-    GROUP_MODE = 1
-
-    def __init__(self, seq1: np.ndarray, seq2: np.ndarray, data_type: str='DNA', mode: str='pair'):
+    def __init__(self, seq1: np.ndarray, seq2: np.ndarray, data_type: str='DNA', use_polarity: bool=False):
         '''
             len(seq1) should == len(seq2)
         '''
         assert type(seq1) == np.ndarray
         assert type(seq2) == np.ndarray
         assert data_type in self.data_type_list
-        assert mode in self.mode_list
 
 
         
         self.seq1, self.seq2 = self._pad_seq(seq1, seq2)
-        self.mode = 0
         self.data_type = 0
+        self.use_polarity = use_polarity
 
         if data_type == 'DNA': self.data_type = self.DNA
         elif data_type == 'RNA': self.data_type = self.RNA
         elif data_type == 'PROTEIN': self.data_type = self.PROTEIN
         
-        if mode == 'PAIR': self.mode = self.PAIR
-        elif mode == 'GROUP': self.mode = self.GROUP
     
     def _pad_seq(self, seq1, seq2):
         '''
@@ -59,8 +51,8 @@ class CrossCorrelation(object):
         freq = 0
 
         # pairwise
-        if self.mode == self.PAIR_MODE:
-            freq = np.equal(seq, np.full(len(seq), symbol)).astype(int)
+
+        freq = np.equal(seq, np.full(len(seq), symbol)).astype(int)
 
         # group wise
         # TODO
@@ -264,8 +256,8 @@ class CrossCorrelation(object):
             c_p = (np.roll(c_p, L)[:2*L-1])
             c_v = (np.roll(c_v, L)[:2*L-1])
 
-            # print(f'c_p: {c_p}')
-            # print(f'c_v: {c_v}')
+            # print(f'c_p: {c_p.max()}')
+            # print(f'c_v: {c_v.max()}')
             # print(f'c: {c_p+c_v}')
             # print(f'max c: {max(c_p+c_v)}')
 
@@ -280,8 +272,8 @@ class CrossCorrelation(object):
             assert np.sum(c_p-gt_p)/len(c_p) < 1 # tolerate some minor error
             assert np.sum(c_v-gt_v)/len(c_v) < 1 # tolerate some minor error
 
-            # return 100*c_p+c_v
-            return c_v
+            if self.use_polarity: return 100*c_p+c_v
+            else: return c_v
 
 
 # def random_gen_seq(len=None, lower_bound = 16, upper_bound = 512, data_type='DNA') -> np.ndarray:
