@@ -6,8 +6,8 @@ import numpy as np
 from fft import DIF_FFT, DIF_iFFT
 
 def main():
-  N = 16
-  x = np.array([i for i in range(N)])
+  N = 8
+  x = np.array([i+1 for i in range(N)])
   out = DIF_FFT(N, x)
   golden = np.fft.fft(np.array(x))
   diff = golden - out

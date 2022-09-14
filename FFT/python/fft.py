@@ -101,13 +101,20 @@ def DIF_FFT_one_stage(N, x, WN):
   if len(WN) != N//2:
     print(f'{N} point FFT should have {N/2} Ws!')
     quit()
+  # print(f'N: {N}')
+  # print(f'WN: {WN}')
 
   if N == 2:
-    return butterfly(x[0], x[1], WN[0])
+    X = butterfly(x[0], x[1], WN[0])
+    print(N)
+    print(X)
+    return X
   else:
     X = [0 for i in range(N)]
     for i in range(N//2):
       X[i], X[i+N//2] = butterfly(x[i], x[i+N//2], WN[i])
+    print(f'N:{N}')
+    print(f'X:{X}')
     next_WN = [WN[2*j] for j in range(N//4)]
     out_1 = DIF_FFT_one_stage(N//2, X[:N//2], next_WN)
     out_2 = DIF_FFT_one_stage(N//2, X[N//2:], next_WN)
