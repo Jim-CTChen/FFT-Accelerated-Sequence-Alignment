@@ -4,34 +4,42 @@
 `define END_CYCLE 1000
 
 // define different test case
-`ifdef tb8
+`ifdef point8
   `define PAT_PATH "./dat/dat8.txt"
   `define GOLD_REAL_PATH "./dat/gold8_real.txt"
   `define GOLD_IMAG_PATH "./dat/gold8_imag.txt"
-`endif
-`ifdef tb4
+  `define MODE 1
+  `define FFT_POINT 8
+`endif // point8
+`ifdef point4
   `define PAT_PATH "./dat/dat4.txt"
   `define GOLD_REAL_PATH "./dat/gold4_real.txt"
   `define GOLD_IMAG_PATH "./dat/gold4_imag.txt"
-`endif
-`ifdef SDF
-  $sdf_annotate("FFT.sdf", fft_proc);
-`endif // SDF
+  `define MODE 0
+  `define FFT_POINT 4
+`endif // point4
+
 module tb;
-  parameter FFT_POINT = 8;
+  initial begin
+    `ifdef SDF
+      $sdf_annotate("FFT_syn.sdf", fft_proc);
+    `endif // SDF
+  end
   parameter DECIMAL_WIDTH = 8;
   parameter WHOLE_WIDTH = 5;
   parameter DATA_WIDTH = DECIMAL_WIDTH+WHOLE_WIDTH;
 
   reg clk;
   reg rst_n;
-  reg [DATA_WIDTH-1:0] pats_mem [0:FFT_POINT-1];
-  reg [DATA_WIDTH+2:0] gold_real_mem [0:FFT_POINT-1];
-  reg [DATA_WIDTH+2:0] gold_imag_mem [0:FFT_POINT-1];
+  reg [DATA_WIDTH-1:0] pats_mem [0:`FFT_POINT-1];
+  reg [DATA_WIDTH+2:0] gold_real_mem [0:`FFT_POINT-1];
+  reg [DATA_WIDTH+2:0] gold_imag_mem [0:`FFT_POINT-1];
   reg [5:0] out_counter_r, out_counter_w;
   reg [5:0] err_counter_r, err_counter_w;
 
   // fft_proc in/out
+  reg mode_en;
+  reg [2:0] mode;
   reg valid_in;
   reg [DATA_WIDTH-1:0] data_in_real, data_in_imag;
   wire valid_out;
@@ -41,6 +49,8 @@ module tb;
   FFT_PROC fft_proc(
     .clk(clk),
     .rst_n(rst_n),
+    .mode_en(mode_en),
+    .mode(mode),
     .valid_in(valid_in),
     .data_in_real(data_in_real),
     .data_in_imag(data_in_imag),
@@ -77,13 +87,18 @@ module tb;
     out_counter_w = 0;
     err_counter_w = 0;
     valid_in = 0;
+    mode_en = 0;
 		$display("-----------------------------------------------------\n");
 	 	$display("START!!! Simulation Start .....\n");
 	 	$display("-----------------------------------------------------\n");
 
     #(`CYCLE*10);
+    mode_en = 1;
+    mode = `MODE;
+    #`CYCLE
+    mode_en = 0;
 
-    for (i = 0; i < FFT_POINT; i=i+1) begin
+    for (i = 0; i < `FFT_POINT; i=i+1) begin
       @(negedge clk) begin
         valid_in = 1;
         data_in_real = pats_mem[i] << DECIMAL_WIDTH;
@@ -128,7 +143,7 @@ module tb;
 	 	$finish;
   end
   always @(*) begin
-    if (out_counter_r == 8) begin
+    if (out_counter_r == `FFT_POINT) begin
       if (err_counter_r == 0) begin
         $display("=======================The test result is ..... PASS=========================");
         $display("\n");

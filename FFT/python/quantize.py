@@ -1,48 +1,5 @@
 import sys
 
-def bin2decimal_2complement(x:str, d=0):
-  '''
-    convert 2's complement binary to decimal
-    param:
-      x: binary format (2's complement)
-      d: place for decimal point
-    example:
-      x = 110, d = 0 >> -2
-      x = 0111, d = 1 >> 3.5
-  '''
-  sign = x[0] == '1'
-  x = x[1:]
-
-  # deal with 2's complement
-  if sign:
-    meet_1 = False
-    x = list(x)
-    for i in reversed(range(len(x))):
-      if meet_1: x[i] = '0' if x[i] == '1' else '1'
-      elif x[i] == '1': meet_1 = True
-    x = ''.join(x)
-
-  if d == 0: x += '.'
-  else: x = x[:-d] + '.' + x[-d:]
-
-  whole_str, dec_str = str(x).split(".")
-  
-  # whole part
-  whole_str = whole_str[::-1]
-  whole = 0
-  for p, b in enumerate(whole_str):
-    if b == '1': whole += pow(2, p)
-  
-  # dec part
-  dec = 0
-  for p, b in enumerate(dec_str):
-    if b == '1': dec += pow(2, -(p+1))
-
-  return whole+dec if not sign else -(whole+dec)
-  
-
-
-
 def decimal2bin(x):
   return bin(x).lstrip("0b")
 
@@ -190,25 +147,130 @@ def binary_presenter(bit_string, shift):
       binary = bit_string[:len(bit_string)+shift] + "." + bit_string[len(bit_string)+shift:]
   return binary
 
-def main():
-  x = -0.707
-  bits = 8
-  if len(sys.argv) >= 3:
-    x = float(sys.argv[1])
-    bits = int(sys.argv[2])
+def float_to_float_bin(x, bits):
   bit_string, shift = float2bin(x, bits)
   print(f'floating number: {x}, bits: {bits}')
   print(f'bit string: {bit_string}')
   print(f'shift: {shift}')
   print(f'binary: {binary_presenter(bit_string, shift)}')
+
+######################################
+
+def float_to_fixed_bin(x, bits = 20, decimal_place=8, verbose=False):
+  '''
+    convert floating number into binary format (fixed point)
+    param:
+      x: floating number to be converted
+      bits: number of bits the output will be
+      decimal_place: where to place decimal point
+    output:
+      bit_string: binary string (length = bits)
+  '''
+  x = round(x, decimal_place+2)
+  # print(f'x: {x}')
+  # sign bit
+  bits -= 1
+
+  # handle negative input
+  negative = False if x >= 0 else True
+  if negative: x = -x
+  # split() separates whole number and decimal
+  # part and stores it in two separate variables
+  x = str(x)
+  if (x.find(".") == -1): x += "."
+  whole, dec = x.split(".")
+
+  # Convert both whole number and decimal 
+  # part from string type to integer type
+  whole = int(whole)
+  dec = float("0."+dec)
+
+  bit_string = None
+
+  # whole part
+  whole_bits = bits-decimal_place # -1 for sign bit
+  whole_bitstring = bin(whole).lstrip("0b")
+  whole_bitstring = "0"*(whole_bits-len(whole_bitstring))+whole_bitstring
+
+  # decimal part
+  decimal_bitstring = ""
+  decimal_place += 1 # for rounding
+  for i in range(decimal_place):
+    # if decimal part = 0, then end
+    if not dec or dec == 0:
+      # add trailing zeros to match "bits"
+      decimal_bitstring += '0'*(decimal_place-i)
+      break
+
+    # Multiply the decimal value by 2
+    # and separate the whole number part
+    # and decimal part
+    whole, dec = str(dec * 2).split(".")
+
+    # Convert the decimal part to float again
+    dec = float("0."+dec)
+
+    # Keep adding the integer parts
+    # receive to the result variable
+    decimal_bitstring += whole
+
+
+  bit_string = whole_bitstring+decimal_bitstring
+
+  # round last digit
+  if decimal_place > 0:
+    # print('before round')
+    # print(bit_string)
+    if bit_string[-1] == '1':
+      round_string = ""
+      bit_string = bit_string[:-1]
+      flip = True
+      for bit in reversed(bit_string):
+        if flip:
+          if bit == '0':
+            round_string = "1" + round_string
+            flip = False
+          else:
+            round_string = "0" + round_string
+        else:
+          round_string = bit + round_string
+      bit_string = round_string
+    else: bit_string = bit_string[:-1]
+    # print('after round')
+    # print(bit_string)
+
+  if negative:
+    bit_string = "1"+twos_complement(bit_string, bits)
+  else:
+    bit_string = "0"+bit_string
+
+  if verbose: print(bit_string)
+
+  return bit_string
+  
+
+
+
+
+def main():
+  x = 0.9238795325112867
+  bits = 20
+  decimal_place = 8
+  if len(sys.argv) >= 2: x = float(sys.argv[1])
+  if len(sys.argv) >= 3: bits = int(sys.argv[2])
+  if len(sys.argv) >= 4: decimal_place = int(sys.argv[3])
+
+  # floating point binary
+  # float_to_float_bin(x, bits)
+
+  # fixed point binary
+  float_to_fixed_bin(x, bits, decimal_place, True)
+
+  
   
 
 if __name__ == '__main__':
   '''
-    usage: python3 tool.py [x] [bits]
+    usage: python3 quantize.py [x] [bits]
   '''
-  while True:
-    bit = input()
-    d = bin2decimal_2complement(bit, 8)
-    print(d)
-  # main()
+  main()

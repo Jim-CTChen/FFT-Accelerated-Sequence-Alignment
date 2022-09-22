@@ -73,6 +73,7 @@ def DIF_FFT(N: int, x: np.ndarray) -> np.ndarray:
     quit()
 
   WN = [(cmath.exp(2/N*math.pi*(-1j)))**i for i in range(N//2)]
+  np.set_printoptions(precision=4)
   raw = DIF_FFT_one_stage(N, x, WN)
 
   # calculate address
@@ -81,7 +82,7 @@ def DIF_FFT(N: int, x: np.ndarray) -> np.ndarray:
   for i in range(1, stages+1):
     address = np.concatenate((address, address+2**(stages-i)))
 
-  # print(address)
+  print(address)
   return np.array(raw)[address]
 
 def DIF_FFT_one_stage(N, x, WN):
@@ -95,6 +96,7 @@ def DIF_FFT_one_stage(N, x, WN):
       WN: twiddle factor (length = N/2)
     return list of output (length should be N)
   '''
+  np.set_printoptions(precision=4)
   if len(x) != N:
     print(f'{N} point FFT but receive data of length {len(x)}!')
     quit()
@@ -106,15 +108,15 @@ def DIF_FFT_one_stage(N, x, WN):
 
   if N == 2:
     X = butterfly(x[0], x[1], WN[0])
-    print(N)
-    print(X)
+    # print(N)
+    # print(X)
     return X
   else:
     X = [0 for i in range(N)]
     for i in range(N//2):
       X[i], X[i+N//2] = butterfly(x[i], x[i+N//2], WN[i])
-    print(f'N:{N}')
-    print(f'X:{X}')
+    # print(f'N:{np.array(N)}')
+    # print(f'X:{np.array(X)}')
     next_WN = [WN[2*j] for j in range(N//4)]
     out_1 = DIF_FFT_one_stage(N//2, X[:N//2], next_WN)
     out_2 = DIF_FFT_one_stage(N//2, X[N//2:], next_WN)

@@ -31,11 +31,13 @@ if __name__ == '__main__':
 
     a_pad = np.pad(a, (0, L), 'constant')
     b_pad = np.pad(b, (0, L), 'constant')
-    b_pad_flip =  np.flip(b_pad)
+    # b_pad_flip =  np.flip(b_pad)
     f_a = np.fft.rfft(a_pad)
-    f_b = np.fft.rfft(b_pad_flip)
+    # f_b = np.fft.rfft(b_pad_flip)
+    f_b = np.fft.rfft(b_pad)
+    f_b = np.conjugate(f_b)
     c = np.fft.irfft(f_a*f_b).astype(float)
     print("Numpy FFT cross-correlation:")
-    c = np.roll(c, L)[:2*L-1]
-    # print(c)
+    print(np.array_repr(c).replace('\n', ''))
+    c = np.roll(c, L)[1:2*L]
     print(np.array_repr(c).replace('\n', ''))

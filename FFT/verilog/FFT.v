@@ -33,18 +33,24 @@ module FFT_PROC #(
   reg  valid_in_r, valid_in_w;
   reg  signed [DATA_WIDTH-1:0] data_in_real_r, data_in_real_w;
   reg  signed [DATA_WIDTH-1:0] data_in_imag_r, data_in_imag_w;
-  reg  signed [DATA_WIDTH-1:0] s_1_in_real;
-  reg  signed [DATA_WIDTH-1:0] s_1_in_imag;
-  wire signed [DATA_WIDTH  :0] s_1_out_real;
-  wire signed [DATA_WIDTH  :0] s_1_out_imag;
-  wire signed [DATA_WIDTH+1:0] s_2_out_real;
-  wire signed [DATA_WIDTH+1:0] s_2_out_imag;
-  wire signed [DATA_WIDTH+2:0] s_3_out_real;
-  wire signed [DATA_WIDTH+2:0] s_3_out_imag;
-  reg  s_1_valid_in;
-  wire s_1_valid_out;
-  wire s_2_valid_out;
-  wire s_3_valid_out;
+  reg  signed [DATA_WIDTH:0] fft_8_in_real;
+  reg  signed [DATA_WIDTH:0] fft_8_in_imag;
+  reg  signed [DATA_WIDTH+1:0] fft_4_in_real;
+  reg  signed [DATA_WIDTH+1:0] fft_4_in_imag;
+  reg  signed [DATA_WIDTH+2:0] fft_2_in_real;
+  reg  signed [DATA_WIDTH+2:0] fft_2_in_imag;
+  wire signed [DATA_WIDTH  :0] fft_8_out_real;
+  wire signed [DATA_WIDTH  :0] fft_8_out_imag;
+  wire signed [DATA_WIDTH+1:0] fft_4_out_real;
+  wire signed [DATA_WIDTH+1:0] fft_4_out_imag;
+  wire signed [DATA_WIDTH+2:0] fft_2_out_real;
+  wire signed [DATA_WIDTH+2:0] fft_2_out_imag;
+  reg  fft_8_valid_in;
+  reg  fft_4_valid_in;
+  reg  fft_2_valid_in;
+  wire fft_8_valid_out;
+  wire fft_4_valid_out;
+  wire fft_2_valid_out;
 
   reg valid_out_r, valid_out_w;
   reg signed [DATA_WIDTH+2:0] data_out_real_r, data_out_real_w;
@@ -53,7 +59,7 @@ module FFT_PROC #(
   reg [2:0] state_r, state_w;
   reg [5:0] counter_r, counter_w;
   reg [9:0] fft_point;
-  reg [2:0] mode_r, mode_w;
+  reg [2:0] mode_r, mode_w; // decide fft point
   reg signed [DATA_WIDTH+2:0] output_buf_real_r [MAX_FFT_POINT-1:0], output_buf_real_w [MAX_FFT_POINT-1:0];
   reg signed [DATA_WIDTH+2:0] output_buf_imag_r [MAX_FFT_POINT-1:0], output_buf_imag_w [MAX_FFT_POINT-1:0];
 
@@ -62,37 +68,43 @@ module FFT_PROC #(
   assign data_out_imag = data_out_imag_r;
   assign ready = (state_r == IDLE_S);
 
+  wire signed [5:0] test;
+  wire [5:0] test1;
+
+  assign test = 4'sb1111;
+  assign test1 = 4'b1111;
+
   FFT_8 #(.DATA_WIDTH(DATA_WIDTH+1)) fft8 (
     .clk(clk),
     .rst_n(rst_n),
-    .valid_in(s_1_valid_in),
-    .data_in_real({s_1_in_real[DATA_WIDTH-1], s_1_in_real}),
-    .data_in_imag({s_1_in_imag[DATA_WIDTH-1], s_1_in_imag}),
-    .valid_out(s_1_valid_out),
-    .data_out_real(s_1_out_real),
-    .data_out_imag(s_1_out_imag)
+    .valid_in(fft_8_valid_in),
+    .data_in_real(fft_8_in_real),
+    .data_in_imag(fft_8_in_imag),
+    .valid_out(fft_8_valid_out),
+    .data_out_real(fft_8_out_real),
+    .data_out_imag(fft_8_out_imag)
   );
 
   FFT_4 #(.DATA_WIDTH(DATA_WIDTH+2)) fft4 (
     .clk(clk),
     .rst_n(rst_n),
-    .valid_in(s_1_valid_out),
-    .data_in_real({s_1_out_real[DATA_WIDTH], s_1_out_real}),
-    .data_in_imag({s_1_out_imag[DATA_WIDTH], s_1_out_imag}),
-    .valid_out(s_2_valid_out),
-    .data_out_real(s_2_out_real),
-    .data_out_imag(s_2_out_imag)
+    .valid_in(fft_4_valid_in),
+    .data_in_real(fft_4_in_real),
+    .data_in_imag(fft_4_in_imag),
+    .valid_out(fft_4_valid_out),
+    .data_out_real(fft_4_out_real),
+    .data_out_imag(fft_4_out_imag)
   );
 
   FFT_2 #(.DATA_WIDTH(DATA_WIDTH+3)) fft2 (
     .clk(clk),
     .rst_n(rst_n),
-    .valid_in(s_2_valid_out),
-    .data_in_real({s_2_out_real[DATA_WIDTH+1], s_2_out_real}),
-    .data_in_imag({s_2_out_imag[DATA_WIDTH+1], s_2_out_imag}),
-    .valid_out(s_3_valid_out),
-    .data_out_real(s_3_out_real),
-    .data_out_imag(s_3_out_imag)
+    .valid_in(fft_2_valid_in),
+    .data_in_real(fft_2_in_real),
+    .data_in_imag(fft_2_in_imag),
+    .valid_out(fft_2_valid_out),
+    .data_out_real(fft_2_out_real),
+    .data_out_imag(fft_2_out_imag)
   );
 
   // input FF
@@ -104,15 +116,14 @@ module FFT_PROC #(
 
   // mode & fft point
   always @(*) begin
-    fft_point = 8;
     mode_w = mode_r;
     if (state_r == IDLE_S) begin
       if (mode_en) mode_w = mode;
     end
     case (mode_r)
-      POINT_4: fft_point = 4;
-      POINT_8: fft_point = 8;
       POINT_16: fft_point = 16;
+      POINT_8: fft_point = 8;
+      POINT_4: fft_point = 4;
     endcase
   end
 
@@ -153,7 +164,7 @@ module FFT_PROC #(
       end
       CALC_S: begin
         if (counter_r == fft_point-1) counter_w = 0;
-        else if (s_3_valid_out) counter_w = counter_r + 1;
+        else if (fft_2_valid_out) counter_w = counter_r + 1;
         else counter_w = counter_r;
       end
       END_S: begin
@@ -163,22 +174,46 @@ module FFT_PROC #(
     endcase
   end
 
-  // stage 1 input
+  // submodule input
   always @(*) begin
-    s_1_valid_in = 0;
-    s_1_in_real = 0;
-    s_1_in_imag = 0;
+    fft_8_valid_in = 0;
+    fft_8_in_real  = 0;
+    fft_8_in_imag  = 0;
+    fft_4_valid_in = fft_8_valid_out;
+    fft_4_in_real  = fft_8_out_real;
+    fft_4_in_imag  = fft_8_out_imag;
+    fft_2_valid_in = fft_4_valid_out;
+    fft_2_in_real  = fft_4_out_real;
+    fft_2_in_imag  = fft_4_out_imag;
     if (state_r == IDLE_S) begin
       if (valid_in_r) begin
-        s_1_valid_in = 1;
-        s_1_in_real = data_in_real_r;
-        s_1_in_imag = data_in_imag_r;
+        case (mode_r)
+          POINT_4: begin
+            fft_4_valid_in = 1;
+            fft_4_in_real = data_in_real_r;
+            fft_4_in_imag = data_in_imag_r;
+          end
+          POINT_8: begin
+            fft_8_valid_in = 1;
+            fft_8_in_real = data_in_real_r;
+            fft_8_in_imag = data_in_imag_r;
+          end
+        endcase
       end
     end
     else if (state_r == INPUT_S) begin
-      s_1_valid_in = 1;
-      s_1_in_real = data_in_real_r;
-      s_1_in_imag = data_in_imag_r;
+      case (mode_r)
+        POINT_4: begin
+          fft_4_valid_in = 1;
+          fft_4_in_real = data_in_real_r;
+          fft_4_in_imag = data_in_imag_r;
+        end
+        POINT_8: begin
+          fft_8_valid_in = 1;
+          fft_8_in_real = data_in_real_r;
+          fft_8_in_imag = data_in_imag_r;
+        end
+      endcase
     end
   end
 
@@ -200,41 +235,66 @@ module FFT_PROC #(
       output_buf_real_w[i] = output_buf_real_r[i];
       output_buf_imag_w[i] = output_buf_imag_r[i];
     end
-    if (state_r == CALC_S && s_3_valid_out) begin
-      case (counter_r)
-        0: begin
-          output_buf_real_w[0] = s_3_out_real;
-          output_buf_imag_w[0] = s_3_out_imag;
+    if (state_r == CALC_S && fft_2_valid_out) begin
+      case (mode_r)
+        POINT_8: begin
+          case (counter_r)
+            0: begin
+              output_buf_real_w[0] = fft_2_out_real;
+              output_buf_imag_w[0] = fft_2_out_imag;
+            end
+            1: begin
+              output_buf_real_w[4] = fft_2_out_real;
+              output_buf_imag_w[4] = fft_2_out_imag;
+            end
+            2: begin
+              output_buf_real_w[2] = fft_2_out_real;
+              output_buf_imag_w[2] = fft_2_out_imag;
+            end
+            3: begin
+              output_buf_real_w[6] = fft_2_out_real;
+              output_buf_imag_w[6] = fft_2_out_imag;
+            end
+            4: begin
+              output_buf_real_w[1] = fft_2_out_real;
+              output_buf_imag_w[1] = fft_2_out_imag;
+            end
+            5: begin
+              output_buf_real_w[5] = fft_2_out_real;
+              output_buf_imag_w[5] = fft_2_out_imag;
+            end
+            6: begin
+              output_buf_real_w[3] = fft_2_out_real;
+              output_buf_imag_w[3] = fft_2_out_imag;
+            end
+            7: begin
+              output_buf_real_w[7] = fft_2_out_real;
+              output_buf_imag_w[7] = fft_2_out_imag;
+            end
+          endcase
         end
-        1: begin
-          output_buf_real_w[4] = s_3_out_real;
-          output_buf_imag_w[4] = s_3_out_imag;
-        end
-        2: begin
-          output_buf_real_w[2] = s_3_out_real;
-          output_buf_imag_w[2] = s_3_out_imag;
-        end
-        3: begin
-          output_buf_real_w[6] = s_3_out_real;
-          output_buf_imag_w[6] = s_3_out_imag;
-        end
-        4: begin
-          output_buf_real_w[1] = s_3_out_real;
-          output_buf_imag_w[1] = s_3_out_imag;
-        end
-        5: begin
-          output_buf_real_w[5] = s_3_out_real;
-          output_buf_imag_w[5] = s_3_out_imag;
-        end
-        6: begin
-          output_buf_real_w[3] = s_3_out_real;
-          output_buf_imag_w[3] = s_3_out_imag;
-        end
-        7: begin
-          output_buf_real_w[7] = s_3_out_real;
-          output_buf_imag_w[7] = s_3_out_imag;
+        POINT_4: begin
+          case (counter_r)
+            0: begin
+              output_buf_real_w[0] = fft_2_out_real;
+              output_buf_imag_w[0] = fft_2_out_imag;
+            end
+            1: begin
+              output_buf_real_w[2] = fft_2_out_real;
+              output_buf_imag_w[2] = fft_2_out_imag;
+            end
+            2: begin
+              output_buf_real_w[1] = fft_2_out_real;
+              output_buf_imag_w[1] = fft_2_out_imag;
+            end
+            3: begin
+              output_buf_real_w[3] = fft_2_out_real;
+              output_buf_imag_w[3] = fft_2_out_imag;
+            end
+          endcase
         end
       endcase
+      
     end
   end
 
@@ -398,17 +458,21 @@ module FFT_8 #(
         // simply multiply and shift back the result
 
         // diff_real*twiddle_real
-        real_temp1 = {{(TWIDDLE_WIDTH-1){FIFO_real_r[FIFO_len-1][DATA_WIDTH-1]}}, FIFO_real_r[FIFO_len-1][DATA_WIDTH-2:0]} * 
-                     {{(DATA_WIDTH-1){twiddle_factor_real[counter_r][TWIDDLE_WIDTH-1]}}, twiddle_factor_real[counter_r][TWIDDLE_WIDTH-2:0]};
+        real_temp1 = FIFO_real_r[FIFO_len-1] * twiddle_factor_real[counter_r];
+        // real_temp1 = {{(TWIDDLE_WIDTH-1){FIFO_real_r[FIFO_len-1][DATA_WIDTH-1]}}, FIFO_real_r[FIFO_len-1][DATA_WIDTH-2:0]} * 
+        //              {{(DATA_WIDTH-1){twiddle_factor_real[counter_r][TWIDDLE_WIDTH-1]}}, twiddle_factor_real[counter_r][TWIDDLE_WIDTH-2:0]};
         // diff_imag*twiddle_imag
-        real_temp2 = {{(TWIDDLE_WIDTH-1){FIFO_imag_r[FIFO_len-1][DATA_WIDTH-1]}}, FIFO_imag_r[FIFO_len-1][DATA_WIDTH-2:0]} * 
-                     {{(DATA_WIDTH-1){twiddle_factor_imag[counter_r][TWIDDLE_WIDTH-1]}}, twiddle_factor_imag[counter_r][TWIDDLE_WIDTH-2:0]};
+        real_temp2 = FIFO_imag_r[FIFO_len-1]*twiddle_factor_imag[counter_r];
+        // real_temp2 = {{(TWIDDLE_WIDTH-1){FIFO_imag_r[FIFO_len-1][DATA_WIDTH-1]}}, FIFO_imag_r[FIFO_len-1][DATA_WIDTH-2:0]} * 
+        //              {{(DATA_WIDTH-1){twiddle_factor_imag[counter_r][TWIDDLE_WIDTH-1]}}, twiddle_factor_imag[counter_r][TWIDDLE_WIDTH-2:0]};
         // diff_real*twiddle_imag
-        imag_temp1 = {{(TWIDDLE_WIDTH-1){FIFO_real_r[FIFO_len-1][DATA_WIDTH-1]}}, FIFO_real_r[FIFO_len-1][DATA_WIDTH-2:0]} * 
-                     {{(DATA_WIDTH-1){twiddle_factor_imag[counter_r][TWIDDLE_WIDTH-1]}}, twiddle_factor_imag[counter_r][TWIDDLE_WIDTH-2:0]};
+        imag_temp1 = FIFO_real_r[FIFO_len-1]*twiddle_factor_imag[counter_r];
+        // imag_temp1 = {{(TWIDDLE_WIDTH-1){FIFO_real_r[FIFO_len-1][DATA_WIDTH-1]}}, FIFO_real_r[FIFO_len-1][DATA_WIDTH-2:0]} * 
+        //              {{(DATA_WIDTH-1){twiddle_factor_imag[counter_r][TWIDDLE_WIDTH-1]}}, twiddle_factor_imag[counter_r][TWIDDLE_WIDTH-2:0]};
         // diff_imag*twiddle_real
-        imag_temp2 = {{(TWIDDLE_WIDTH-1){FIFO_imag_r[FIFO_len-1][DATA_WIDTH-1]}}, FIFO_imag_r[FIFO_len-1][DATA_WIDTH-2:0]} * 
-                     {{(DATA_WIDTH-1){twiddle_factor_real[counter_r][TWIDDLE_WIDTH-1]}}, twiddle_factor_real[counter_r][TWIDDLE_WIDTH-2:0]};
+        imag_temp2 = FIFO_imag_r[FIFO_len-1]*twiddle_factor_real[counter_r];
+        // imag_temp2 = {{(TWIDDLE_WIDTH-1){FIFO_imag_r[FIFO_len-1][DATA_WIDTH-1]}}, FIFO_imag_r[FIFO_len-1][DATA_WIDTH-2:0]} * 
+        //              {{(DATA_WIDTH-1){twiddle_factor_real[counter_r][TWIDDLE_WIDTH-1]}}, twiddle_factor_real[counter_r][TWIDDLE_WIDTH-2:0]};
         real_temp3 = real_temp1 - real_temp2;
         data_out_real_w = real_temp3 >>> (TWIDDLE_SHIFT);
         imag_temp3 = imag_temp1 + imag_temp2;
@@ -423,17 +487,12 @@ module FFT_8 #(
       END_S: begin
         shiftFIFO(0);
         valid_out_w = 1;
-        real_temp1 = {{(TWIDDLE_WIDTH-1){FIFO_real_r[FIFO_len-1][DATA_WIDTH-1]}}, FIFO_real_r[FIFO_len-1][DATA_WIDTH-2:0]} * 
-                     {{(DATA_WIDTH-1){twiddle_factor_real[counter_r][TWIDDLE_WIDTH-1]}}, twiddle_factor_real[counter_r][TWIDDLE_WIDTH-2:0]};
-        // diff_imag*twiddle_imag
-        real_temp2 = {{(TWIDDLE_WIDTH-1){FIFO_imag_r[FIFO_len-1][DATA_WIDTH-1]}}, FIFO_imag_r[FIFO_len-1][DATA_WIDTH-2:0]} * 
-                     {{(DATA_WIDTH-1){twiddle_factor_imag[counter_r][TWIDDLE_WIDTH-1]}}, twiddle_factor_imag[counter_r][TWIDDLE_WIDTH-2:0]};
-        // diff_real*twiddle_imag
-        imag_temp1 = {{(TWIDDLE_WIDTH-1){FIFO_real_r[FIFO_len-1][DATA_WIDTH-1]}}, FIFO_real_r[FIFO_len-1][DATA_WIDTH-2:0]} * 
-                     {{(DATA_WIDTH-1){twiddle_factor_imag[counter_r][TWIDDLE_WIDTH-1]}}, twiddle_factor_imag[counter_r][TWIDDLE_WIDTH-2:0]};
-        // diff_imag*twiddle_real
-        imag_temp2 = {{(TWIDDLE_WIDTH-1){FIFO_imag_r[FIFO_len-1][DATA_WIDTH-1]}}, FIFO_imag_r[FIFO_len-1][DATA_WIDTH-2:0]} * 
-                     {{(DATA_WIDTH-1){twiddle_factor_real[counter_r][TWIDDLE_WIDTH-1]}}, twiddle_factor_real[counter_r][TWIDDLE_WIDTH-2:0]};
+
+        real_temp1 = FIFO_real_r[FIFO_len-1]*twiddle_factor_real[counter_r];
+        real_temp2 = FIFO_imag_r[FIFO_len-1]*twiddle_factor_imag[counter_r];
+        imag_temp1 = FIFO_real_r[FIFO_len-1]*twiddle_factor_imag[counter_r];
+        imag_temp2 = FIFO_imag_r[FIFO_len-1]*twiddle_factor_real[counter_r];
+
         real_temp3 = real_temp1 - real_temp2;
         data_out_real_w = real_temp3 >>> (TWIDDLE_SHIFT);
         imag_temp3 = imag_temp1 + imag_temp2;
