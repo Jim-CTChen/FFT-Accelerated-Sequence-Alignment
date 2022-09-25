@@ -1,6 +1,7 @@
 import numpy as np
 import random
 from config import DNA_4, RNA_4, POLARITY_MAPPING, VOLUME_MAPPING, AMINO_ACID_MAPPING
+from config import VOLUME_MAPPING_4, VOLUME_MAPPING_8, VOLUME_MAPPING_16, VOLUME_MAPPING_32, VOLUME_MAPPING_64, VOLUME_MAPPING_RANDOM
 from tool import random_gen_seq
 
 class CrossCorrelation(object):
@@ -10,7 +11,7 @@ class CrossCorrelation(object):
     RNA = 1
     PROTEIN = 2
 
-    def __init__(self, seq1: np.ndarray, seq2: np.ndarray, data_type: str='DNA', use_polarity: bool=False):
+    def __init__(self, seq1: np.ndarray, seq2: np.ndarray, data_type: str='DNA', use_polarity: bool=False, quant_volume=0):
         '''
             len(seq1) should == len(seq2)
         '''
@@ -27,6 +28,21 @@ class CrossCorrelation(object):
         if data_type == 'DNA': self.data_type = self.DNA
         elif data_type == 'RNA': self.data_type = self.RNA
         elif data_type == 'PROTEIN': self.data_type = self.PROTEIN
+
+        if quant_volume == 0:
+            self.volume_mapping = VOLUME_MAPPING
+        elif quant_volume == 4:
+            self.volume_mapping = VOLUME_MAPPING_4
+        elif quant_volume == 8:
+            self.volume_mapping = VOLUME_MAPPING_8
+        elif quant_volume == 16:
+            self.volume_mapping = VOLUME_MAPPING_16
+        elif quant_volume == 32:
+            self.volume_mapping = VOLUME_MAPPING_32
+        elif quant_volume == 64:
+            self.volume_mapping = VOLUME_MAPPING_64
+        elif quant_volume == -1:
+            self.volume_mapping = VOLUME_MAPPING_RANDOM
         
     
     def _pad_seq(self, seq1, seq2):
@@ -70,7 +86,7 @@ class CrossCorrelation(object):
         v = []
         for n in seq:
             symbol = AMINO_ACID_MAPPING[f'{n}']
-            v.append(VOLUME_MAPPING[symbol])
+            v.append(self.volume_mapping[symbol])
         return np.array(v)
 
     def _pad_for_FFT(self, seq):

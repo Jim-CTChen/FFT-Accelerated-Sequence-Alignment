@@ -15,7 +15,7 @@ from HomologousSegmentSet import HomologousSegmentSet
 from DynamicProgramming import DPEngine
 from config import NUCLEIC_ACID, AMINO_ACID, DATA_TYPES, ALGORITHMS, BLOSUM62
 from Aligner import Aligner
-from tool import random_gen_seq, effective_length, eval
+from tool import random_gen_seq, effective_length, evaluate
 
 def print_args(args):
     print(f'threshold: {args.threshold}')
@@ -372,8 +372,9 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path_prefix, split_
     data_type = args.data_type
     n = args.n
     use_polarity = args.use_polarity
+    quant_volume = args.quant_volume
     
-    cor = CrossCorrelation(ref, qry, data_type=data_type, use_polarity=use_polarity)
+    cor = CrossCorrelation(ref, qry, data_type=data_type, use_polarity=use_polarity, quant_volume=quant_volume)
     c = cor.XCorr()
     
     threshold = homologous_threshold
@@ -411,7 +412,7 @@ def test_protein(ref, qry, ref_serial, qry_serial, args, out_path_prefix, split_
     
     if total_segments:
         if split_pass:
-            if eval(my_score, gt): out_path_prefix = f'{out_path_prefix}/pass'
+            if evaluate(my_score, gt): out_path_prefix = f'{out_path_prefix}/pass'
             else: out_path_prefix = f'{out_path_prefix}/fail'
 
         with open(f'{out_path_prefix}/logfile_{ref_serial}_{qry_serial}.txt', 'w') as f:
@@ -513,22 +514,40 @@ def test_protein_by_TFA(tfa_path, out_path, args):
     pass_count = 0
     align_count = 0
     total_reduced_ratio = 0
-    for j in range(len(seqs)):
-        if align_count > 105: break # break if too much sequences in one tfa file
-        ref = seqs[j]
-        ref_serial = des[j]
-        for i in range(j+1, len(seqs)):
-            qry = seqs[i]
-            qry_serial = des[i]
+    if len(seqs) < 20:
+        for j in range(len(seqs)):
+            ref = seqs[j]
+            ref_serial = des[j].replace("/", "_")
+            for i in range(j+1, len(seqs)):
+                qry = seqs[i]
+                qry_serial = des[i].replace("/", "_")
+                if os.path.exists(f'{out_path}/logfile_{ref_serial}_{qry_serial}.txt'): continue
+                has_segment, my_score, gt, reduced_ratio = test_protein(ref, qry, ref_serial, qry_serial, args, out_path, split_pass=True)
+                align_count += 1
+                total_reduced_ratio += reduced_ratio
+                if has_segment:
+                    acc = 1 - (abs(my_score)-abs(gt))/abs(gt)
+                    has_segment_count += 1
+                    if evaluate(my_score, gt): pass_count += 1
+                    acc_list.append(acc)
+    else: # too much sequence, random select ref and qry
+        for i in range(500):
+            print(f'aligning alignment {i}')
+            ref_id = random.randint(0, len(seqs)-1)
+            qry_id = random.randint(0, len(seqs)-1)
+            ref = seqs[ref_id]
+            ref_serial = des[ref_id].replace("/", "_")
+            qry = seqs[qry_id]
+            qry_serial = des[qry_id].replace("/", "_")
+            if os.path.exists(f'{out_path}/logfile_{ref_serial}_{qry_serial}.txt'): continue
             has_segment, my_score, gt, reduced_ratio = test_protein(ref, qry, ref_serial, qry_serial, args, out_path, split_pass=True)
             align_count += 1
             total_reduced_ratio += reduced_ratio
             if has_segment:
-                acc = 1 - (abs(my_score)-abs(gt))/abs(gt)
-                has_segment_count += 1
-                if my_score < gt*1.1 and my_score > gt*0.9: # within +- 10%
-                    pass_count += 1
-                acc_list.append(acc)
+                    acc = 1 - (abs(my_score)-abs(gt))/abs(gt)
+                    has_segment_count += 1
+                    if evaluate(my_score, gt): pass_count += 1
+                    acc_list.append(acc)
     print(f'number of cases have homologous segment: {has_segment_count}')
     avg_reduced_ratio_among_all = 0
     avg_reduced_ratio_among_reduced = 0
@@ -569,6 +588,9 @@ def test_protein_by_TFA(tfa_path, out_path, args):
     return pass_count, has_segment_count, total_reduced_ratio, align_count
 
 def tfa_experiment(args):
+    '''
+        run test on BAliBASE 3.0
+    '''
     data_set = str(args.data_set)
     tfa_path_prefix = f'../../data/bb3_release/RV{data_set}'
     out_path_prefix = f'../out/BAliBASE3.0/new/bbs_RV{data_set}_{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}'
@@ -641,13 +663,12 @@ def tfa_experiment(args):
         f.write(f'avg reduced ratio among reduced alignments = {avg_reduced_ratio_among_reduced}\n')
 
 def fasta_experiment(args):
-    ref_fasta_file = '../../data/FASTA/ref'
     ref_fasta_file = '../../data/FASTA/protein/BBS/1bmr_'
     ref_fasta_file = '../../data/FASTA/protein/BBS/1ac5_'
     ref_fasta_file = '../../data/FASTA/protein/BBS/1ivy_A'
     ref_fasta_file = '../../data/FASTA/protein/BBS/1ysc_'
     ref_fasta_file = '../../data/FASTA/protein/BBS/1buc_A'
-    qry_fasta_file = '../../data/FASTA/qry'
+    ref_fasta_file = '../../data/FASTA/protein/homfam/ref'
     qry_fasta_file = '../../data/FASTA/protein/BBS/NF31_NAEFO'
     qry_fasta_file = '../../data/FASTA/protein/BBS/SCX6_CENLL'
     qry_fasta_file = '../../data/FASTA/protein/BBS/CPVL_HUMAN'
@@ -655,13 +676,85 @@ def fasta_experiment(args):
     qry_fasta_file = '../../data/FASTA/protein/BBS/NF31_NAEFO'
     qry_fasta_file = '../../data/FASTA/protein/BBS/1r2j_A'
     qry_fasta_file = '../../data/FASTA/protein/BBS/Q8jzn5'
+    qry_fasta_file = '../../data/FASTA/protein/homfam/qry'
     out_path = '../out'
     test_protein_by_FASTA(ref_fasta_file, qry_fasta_file, args, out_path)
 
+def homfam_experiment(args):
+    '''
+        run test on homfam
+    '''
+    test_case = args.test_case
+    tfa_path_prefix = f'../../data/homfam'
+    if args.quant_volume == 0: out_path_prefix = f'../out/homfam/{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}/{test_case}'
+    else: out_path_prefix = f'../out/homfam_quant{args.quant_volume}/{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}/{test_case}'
+    print(f'writing to {out_path_prefix}')
+
+    total_pass_count = 0
+    total_has_segment_count = 0
+    total_reduced_ratio = 0
+    total_align_count = 0
+
+    os.system(f'mkdir -p {out_path_prefix}/pass')
+    os.system(f'mkdir -p {out_path_prefix}/fail')
+    tfa_path = f'{tfa_path_prefix}/{test_case}_test-only.vie'
+    out_path = f'{out_path_prefix}'
+    pass_count, has_segment_count, reduced_ratio, align_count = test_protein_by_TFA(tfa_path, out_path, args)
+    total_pass_count += pass_count
+    total_has_segment_count += has_segment_count
+    total_reduced_ratio += reduced_ratio
+    total_align_count += align_count
+
+    # calculate overall metrix
+    avg_pass_rate = total_pass_count/total_has_segment_count
+    avg_hit_rate = total_has_segment_count/total_align_count
+    avg_reduced_ratio_among_all = total_reduced_ratio/total_align_count
+    avg_reduced_ratio_among_reduced = total_reduced_ratio/total_has_segment_count
+
+    print(f'----------------------------------------------------------')
+    print(f'segment hit rate = has segment count / align count')
+    print(f'segment hit rate = {total_has_segment_count}/{total_align_count} = {avg_hit_rate}')
+    print(f'pass rate = pass count / has segment count')
+    print(f'pass rate = {total_pass_count}/{total_has_segment_count} = {avg_pass_rate}')
+    print(f'avg reduced ratio among all alignments: {avg_reduced_ratio_among_all}')
+    print(f'avg reduced ratio among reduced alignments: {avg_reduced_ratio_among_reduced}')
+    print(f'----------------------------------------------------------')
+    
+    # write log file
+    with open(f'{out_path_prefix}/acc_log.txt', 'w') as f:
+        f.write(str(datetime.datetime.now().date()))
+        f.write('\n\n')
+        f.write(f'Dataset: RV{args.data_set}\n')
+        f.write('\n')
+
+        f.write('Settings:\n')
+        f.write(f'1. Algorithm: {args.alg}\n')
+        f.write(f'2. Window size: {args.window_size}\n')
+        f.write(f'3. Threshold: {args.threshold}\n')
+        if args.buffer < 1 and args.buffer > 0:
+            f.write(f'4. Buffer for keypoints: ((len(ref)+len(qry))/2) * {args.buffer}\n')
+        elif args.buffer > 1:
+            f.write(f'4. Buffer for keypoints: {args.buffer}\n')
+        elif args.buffer <= 0:
+            f.write(f'4. Buffer for keypoints: no buffer for keypoints\n')
+        
+        f.write(f'5. n: {args.n}\n')
+        f.write(f'6. Use polarity for xcorr: {args.use_polarity}\n')
+        f.write(f'\n')
+
+        f.write(f'segment hit rate = has segment count / align count\n')
+        f.write(f'segment hit rate = {total_has_segment_count}/{total_align_count} = {avg_hit_rate}\n')
+        f.write(f'pass rate = pass count / has segment count\n')
+        f.write(f'pass rate = {total_pass_count}/{total_has_segment_count} = {avg_pass_rate}\n')
+        f.write(f'avg reduced ratio among all alignments = {avg_reduced_ratio_among_all}\n')
+        f.write(f'avg reduced ratio among reduced alignments = {avg_reduced_ratio_among_reduced}\n')
+
 def main():
+    random.seed(1225)
+    VOLUME_QUANTIZE_OPTION = [-1, 0, 4, 8, 16, 32, 64]
     parser = argparse.ArgumentParser()
-    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='3')
-    parser.add_argument('--window_size', help='size of sliding window', type=int, default='16')
+    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='16')
+    parser.add_argument('--window_size', help='size of sliding window', type=int, default='20')
     parser.add_argument('--alg', help='NW | SW', choices=ALGORITHMS, type=str, default='NW')
     parser.add_argument('--buffer', help='buffer around keypoint, < 1 then ratio to avg length, > 1 then exact width', type=float, default=32)
     parser.add_argument('--data_type', help='data type', choices=DATA_TYPES, type=str, default='PROTEIN')
@@ -669,7 +762,9 @@ def main():
     parser.add_argument('--draw', help='draw plot or save plot', type=bool, default=False)
     parser.add_argument('--pair', help='run pair alignment', type=bool, default=False)
     parser.add_argument('--data_set', help='BAliBASE dataset number. e.g. 12 for RV12', type=int, default=12)
+    parser.add_argument('--test_case', help='homfam dataset id. e.g. aadh for aadh_test-only.vie', type=str, default='aadh')
     parser.add_argument('--use_polarity', help='use polarity for xcorr as well', type=bool, default=False)
+    parser.add_argument('--quant_volume', help='use quantized volume, 0 for no quantize', choices=VOLUME_QUANTIZE_OPTION, type=int, default=0)
     args = parser.parse_args()
 
     show_args = True
@@ -679,7 +774,8 @@ def main():
     if args.pair:
         fasta_experiment(args)
     else:
-        tfa_experiment(args)
+        # tfa_experiment(args)
+        homfam_experiment(args)
     pass
 
 

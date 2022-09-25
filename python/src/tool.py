@@ -37,6 +37,7 @@ def effective_length(offset, ref_len, qry_len):
         eff_l = min(qry_len+offset, ref_len)
     return eff_l
 
-def eval(score, gt, tolerance=0.1):
-    diff = abs(score-gt)
-    return diff < gt*tolerance
+def evaluate(score, gt, tolerance=0.1):
+    upper_bound = max(gt*(1+tolerance), gt*(1-tolerance))
+    lower_bound = min(gt*(1+tolerance), gt*(1-tolerance))
+    return score >= lower_bound and score <= upper_bound
