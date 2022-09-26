@@ -1,0 +1,97 @@
+Magic 271485
+Revision Verdi_O-2018.09
+
+; Window Layout <x> <y> <width> <height> <signalwidth> <valuewidth>
+viewPort 40 21 1237 724 214 65
+
+; File list:
+; openDirFile [-d delimiter] [-s time_offset] [-rf auto_bus_rule_file] path_name file_name
+openDirFile -d / "" "/home/b07036/FFT/verilog/tb.fsdb"
+
+; file time scale:
+; fileTimeScale ### s|ms|us|ns|ps
+
+; signal spacing:
+signalSpacing 5
+
+; windowTimeUnit is used for zoom, cursor & marker
+; waveform viewport range
+zoom 0.000000 40905.000000
+cursor 32500.000000
+marker 0.000000
+
+; user define markers
+; userMarker time_pos marker_name color linestyle
+; visible top row signal index
+top 0
+; marker line index
+markerPos 22
+
+; event list
+; addEvent event_name event_expression
+; curEvent event_name
+
+
+
+COMPLEX_EVENT_BEGIN
+
+
+COMPLEX_EVENT_END
+
+
+
+; toolbar current search type
+; curSTATUS search_type
+curSTATUS ByChange
+
+
+addGroup "G1"
+activeDirFile "" "/home/b07036/FFT/verilog/tb.fsdb"
+addSignal -h 15 /tb/clk
+addSignal -h 15 -holdScope rst_n
+addGroup "TestBench"
+addSignal -h 15 /tb/valid_in
+addSignal -h 15 -holdScope data_in_real[12:0]
+addSignal -h 15 -holdScope data_in_imag[12:0]
+addSignal -h 15 -holdScope pats_mem[0:7]
+addSignal -h 15 -holdScope out_counter_r[5:0]
+addSignal -h 15 -holdScope err_counter_r[5:0]
+addSignal -h 15 -holdScope gold_imag_mem[0:7]
+addSignal -h 15 -holdScope gold_real_mem[0:7]
+addGroup "FFT processor"
+addSignal -h 15 /tb/fft_proc/state_r[2:0]
+addSignal -h 15 -holdScope data_in_imag[12:0]
+addSignal -h 15 -holdScope data_in_real[12:0]
+addSignal -h 15 -holdScope s_1_valid_in
+addSignal -h 15 -holdScope s_1_in_real[12:0]
+addSignal -h 15 -holdScope s_1_in_imag[12:0]
+addSignal -h 15 -holdScope valid_out_r
+addSignal -h 15 -holdScope data_out_real_r[15:0]
+addSignal -h 15 -holdScope data_out_imag_r[15:0]
+addSignal -h 15 -holdScope data_out_real[15:0]
+addGroup "Stage 1"
+addGroup "G5"
+addGroup "G6"
+addGroup "G7"
+addGroup "G8"
+
+; getSignalForm Scope Hierarchy Status
+; active file of getSignalForm
+activeDirFile "" "/home/b07036/FFT/verilog/tb.fsdb"
+
+GETSIGNALFORM_SCOPE_HIERARCHY_BEGIN
+getSignalForm close
+
+"/tb"
+"/tb/fft_proc"
+
+SCOPE_LIST_BEGIN
+"/tb"
+"/tb/fft_proc"
+"/tb/fft_proc/s_1"
+"/tb/fft_proc/s_2"
+SCOPE_LIST_END
+
+GETSIGNALFORM_SCOPE_HIERARCHY_END
+
+
