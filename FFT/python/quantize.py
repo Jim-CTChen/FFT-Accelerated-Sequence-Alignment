@@ -197,7 +197,7 @@ def float_to_fixed_bin(x, bits = 20, decimal_place=8, verbose=False):
   decimal_place += 1 # for rounding
   for i in range(decimal_place):
     # if decimal part = 0, then end
-    if not dec or dec == 0:
+    if not dec or dec <= 0.000000001:
       # add trailing zeros to match "bits"
       decimal_bitstring += '0'*(decimal_place-i)
       break

@@ -9,21 +9,23 @@ import cmath, math
 from quantize import float_to_fixed_bin
 from fft import DIF_FFT, DIF_iFFT
 
-def test(N=32):
+def Xcorr_sim(N=32):
   x = np.array([i+1 for i in range(N)])
-  out = DIF_FFT(N, x)
-  golden = np.fft.fft(np.array(x))
-  diff = golden - out
+  y = np.array([i+1 for i in range(N)])
+  # out = DIF_FFT(N, x)
+  golden_x = np.fft.fft(np.array(x))
+  golden_y = np.fft.fft(np.array(y))
   
-  print('my answer:')
-  print(out)
-  print('golden:')
-  print(golden)
-  # print('diff:')
-  # print(diff.sum())
+  print('golden x:')
+  print(golden_x)
+  print('golden y:')
+  print(golden_y)
 
-  golden_rfft = np.fft.rfft(x)
-  print(golden_rfft)
+  print('golden x*y')
+  print(golden_x*golden_y)
+
+  # golden_rfft = np.fft.rfft(x)
+  # print(golden_rfft)
   # golden_irfft = np.fft.irfft(golden_rfft)
   # print(golden_irfft)
 
@@ -38,13 +40,77 @@ def test(N=32):
   # print(golden_inverse)
   # print(f'diff inverse:')
   # print(diff_inverse.sum())
+  pass
 
-def gen_testcase(N=32):
+def FFT_sim(N=32):
+  x = np.array([i for i in range(N)])
+  out = DIF_FFT(N, x)
+  golden = np.fft.fft(np.array(x))
+  golden_real = golden.real
+  golden_imag = golden.imag
+  golden_real_bit = np.array([float_to_fixed_bin(re, 17, 2) for re in golden_real])
+  golden_imag_bit = np.array([float_to_fixed_bin(re, 17, 2) for re in golden_imag])
+  print(golden_real)
+  print(golden_imag)
+  quit()
+  diff = golden - out
+  
+  print('my answer:')
+  print(out)
+  print('golden:')
+  print(golden)
+  # print('diff:')
+  # print(diff.sum())
+
+  golden_rfft = np.fft.rfft(x)
+  print(golden_rfft)
+
+def gen_testcase_Xcorr(N=32):
+  random.seed(10)
+  MAX_DATA = 7
+  MIN_DATA = 0
+  # x = np.array([random.uniform(MIN_DATA, MAX_DATA) + random.uniform(MIN_DATA, MAX_DATA)*1j for _ in range(N)])
+  x = np.array([i for i in range(N)])
+  y = np.array([i for i in range(N)])
+  x_bit = np.array([float_to_fixed_bin(i, 32, 8) for i in x])
+  y_bit = np.array([float_to_fixed_bin(i, 32, 8) for i in y])
+  
+  with open('pattern/seq1.txt', 'w') as f:
+    for i in range(len(x_bit)):
+      f.write(x_bit[i])
+      f.write(f" // {x[i]}")
+      f.write('\n')
+  with open('pattern/seq2.txt', 'w') as f:
+    for i in range(len(y_bit)):
+      f.write(y_bit[i])
+      f.write(f" // {y[i]}")
+      f.write('\n')
+
+  golden_x = np.fft.fft(np.array(x))
+  golden_y = np.fft.fft(np.array(y))
+  golden_real = golden_x.real*golden_y.real
+  golden_imag = golden_x.imag*(-golden_y.imag)
+  golden_real_bit = np.array([float_to_fixed_bin(re, 50, 8) for re in golden_real])
+  golden_imag_bit = np.array([float_to_fixed_bin(im, 50, 8) for im in golden_imag])
+
+  with open('pattern/gold_real.txt', 'w') as f:
+    for i in range(len(golden_real_bit)):
+      f.write(golden_real_bit[i])
+      f.write(f" // {round(golden_real[i], 6)}")
+      f.write('\n')
+  
+  with open('pattern/gold_imag.txt', 'w') as f:
+    for i in range(len(golden_imag_bit)):
+      f.write(golden_imag_bit[i])
+      f.write(f" // {round(golden_imag[i], 6)}")
+      f.write('\n')
+
+def gen_testcase_FFT(N=32):
   random.seed(10)
   MAX_DATA = 127
   MIN_DATA = -128
-  x = np.array([random.uniform(MIN_DATA, MAX_DATA) + random.uniform(MIN_DATA, MAX_DATA)*1j for _ in range(N)])
-  # x = np.array([i for i in range(N//2)])
+  # x = np.array([random.uniform(MIN_DATA, MAX_DATA) + random.uniform(MIN_DATA, MAX_DATA)*1j for _ in range(N)])
+  x = np.array([i for i in range(N)])
   x_real = x.real
   x_imag = x.imag
   x_real_bit = np.array([float_to_fixed_bin(re, 32, 8) for re in x_real])
@@ -80,7 +146,7 @@ def gen_testcase(N=32):
       f.write(f" // {round(golden_imag[i], 6)}")
       f.write('\n')
   
-def printWN(N=32, write=False):
+def printWN(N=32, write=True):
   # np.set_printoptions(precision=4)
   WN = [(cmath.exp(2/N*math.pi*(-1j)))**i for i in range(N//2)]
   # print(WN)
@@ -94,8 +160,8 @@ def printWN(N=32, write=False):
   # print(WN_imag)
   # quit()
 
-  WN_real_bit = np.array([float_to_fixed_bin(re, 8, 6) for re in WN_real])
-  WN_imag_bit = np.array([float_to_fixed_bin(im, 8, 6) for im in WN_imag])
+  WN_real_bit = np.array([float_to_fixed_bin(re, 16, 14) for re in WN_real])
+  WN_imag_bit = np.array([float_to_fixed_bin(im, 16, 14) for im in WN_imag])
   if write:
     with open("WN.txt", 'w') as f:
       for i in range(len(WN_real_bit)):
@@ -121,10 +187,12 @@ def printWN(N=32, write=False):
   pass
 
 def main():
-  N = 256
+  N = 32
   if len(sys.argv) >= 2: N = int(sys.argv[1])
-  # test(N)
-  gen_testcase(N)
+  # FFT_sim(N)
+  # Xcorr_sim(N)
+  # gen_testcase_FFT(N)
+  gen_testcase_Xcorr(N)
   # printWN(N, True)
   
 
