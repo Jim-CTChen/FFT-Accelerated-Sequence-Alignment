@@ -17,6 +17,10 @@ from config import NUCLEIC_ACID, AMINO_ACID, DATA_TYPES, ALGORITHMS, BLOSUM62
 from Aligner import Aligner
 from tool import random_gen_seq, effective_length, evaluate
 
+'''
+    Look at test_protein(), test_protein_by_TFA(), homfam_experiment()
+'''
+
 def print_args(args):
     print(f'threshold: {args.threshold}')
     print(f'window_size: {args.window_size}')
@@ -24,6 +28,21 @@ def print_args(args):
     print(f'buffer: {args.buffer}')
     print(f'data_type: {args.data_type}')
     print(f'n: {args.n}')
+
+def arg_string(args):
+    arg_str = ''
+    arg_str += f'0. Data type: {args.data_type}\n'
+    arg_str += f'1. Algorithm: {args.alg}\n'
+    arg_str += f'2. Threshold: {args.threshold}\n'
+    arg_str += f'3. Window size: {args.window_size}\n'
+    arg_str += f'4. Num of PEs (band): {args.band}\n'
+    arg_str += f'5. Num of homologous sets (n): {args.n}\n'
+    arg_str += f'6. Use of polarity: {args.use_polarity}\n'
+    arg_str += f'7. Quntization strategy: {args.quant_volume}\n'
+    arg_str += f'8. Resume: {args.resume}\n'
+    arg_str += f'9. Error tolerance: {args.error_tolerance}\n'
+
+    return arg_str
 
 def plot_reduced(out_path, reduced_score_mat, score_mat, match, reduced_trace_path, trace_path, xcorr, name, title, bottom_txt, all_segment_sets, show=False):
 
@@ -80,7 +99,7 @@ def plot_reduced(out_path, reduced_score_mat, score_mat, match, reduced_trace_pa
     fig.text(.5, .02, bottom_txt, ha='center')
     fig.text(.5, .9, title, ha='center')
     if show: plt.show()
-    else: plt.savefig(f'{out_path}/fig_{name}.jpg')
+    else: plt.savefig(f'{out_path}/{name}.jpg')
     plt.close()
 
 def plot(out_path, score_mat, match, trace_path, xcorr, name, title, bottom_txt, show=False):
@@ -184,6 +203,9 @@ def read_sequence(path):
     return description, sequence
 
 def test_DNA(seed):
+    '''
+    DEPRECATED!!!
+    '''
      # np.set_printoptions(suppress=True)
 
     parser = argparse.ArgumentParser()
@@ -285,6 +307,7 @@ def test_protein_non_fixed_threshold(ref, qry, ref_serial, qry_serial, args, alg
     '''
         test on protein
         reduce threshold if no segment found
+        DEPRECATED!!!
     '''
      # np.set_printoptions(suppress=True)
     homologous_threshold = args.threshold
@@ -358,123 +381,6 @@ def test_protein_non_fixed_threshold(ref, qry, ref_serial, qry_serial, args, alg
     plot(reduced_score_mat, score_mat, match, reduced_path, path, xcorr=c, name=f'{ref_serial}_{qry_serial}' ,title=f'{ref_serial} and {qry_serial}, threshold={threshold}', bottom_txt=score)
     return 1-abs(gt-my_score)/abs(gt)
 
-def test_protein(ref, qry, ref_serial, qry_serial, args, out_path_prefix, split_pass=False):
-    '''
-        test on protein
-        fixed threshold
-        return has_segment, my_score, gt, reduced_ratio
-    '''
-    debug = False
-    homologous_threshold = args.threshold
-    homologous_window_size = args.window_size
-    alg = args.alg
-    buffer = args.buffer
-    data_type = args.data_type
-    n = args.n
-    use_polarity = args.use_polarity
-    quant_volume = args.quant_volume
-    
-    cor = CrossCorrelation(ref, qry, data_type=data_type, use_polarity=use_polarity, quant_volume=quant_volume)
-    c = cor.XCorr()
-    
-    threshold = homologous_threshold
-    homologous = Homologous(ref, qry, c, threshold=threshold, data_type=data_type,\
-        n=n, wndw_size=homologous_window_size) # use origin sequence
-    total_segments, homologous_segments_sets = homologous.get_all_homologous_segments()
-    all_sets = copy.deepcopy(homologous_segments_sets)
-    
-
-    if total_segments:
-        if debug: print(f'Find total {total_segments} homologous segments!')
-        # print('Reducing search space...')
-        reducer = ReduceSearchSpace(all_sets, ref.shape[0], qry.shape[0])
-        key_points = reducer.reduce()
-        for idx, kp in enumerate(key_points):
-            if idx == key_points.shape[0]-1: break
-            next_kp = key_points[idx+1]
-            assert kp[0] <= next_kp[0], f'error, {kp}, {next_kp}'
-            assert kp[1] <= next_kp[1], f'error, {kp}, {next_kp}'
-
-        # print('Running reduced DP...')
-        dp_engine = DPEngine(ref, qry, alg=alg, data_type=data_type, buffer=buffer)
-        my_score, reduced_ratio = dp_engine.dp_in_reduced_space(key_points)
-        dp_engine.traceback()
-    else:
-        if debug: print('No segments found!')
-    
-
-    # print('Running normal DP...')
-    dp_engine2 = DPEngine(ref, qry, alg=alg, data_type=data_type)
-    gt = dp_engine2.dp_normal()
-    dp_engine2.traceback()
-
-
-    
-    if total_segments:
-        if split_pass:
-            if evaluate(my_score, gt): out_path_prefix = f'{out_path_prefix}/pass'
-            else: out_path_prefix = f'{out_path_prefix}/fail'
-
-        with open(f'{out_path_prefix}/logfile_{ref_serial}_{qry_serial}.txt', 'w') as f:
-            f.write(f'ref length: {len(ref)}\n')
-            f.write(f'qry length: {len(qry)}\n')
-            f.write(f'gt score: {gt}\n')
-            if total_segments: 
-                f.write(f'reduced score: {my_score}\n\n')
-                f.write(f'reduced ratio: {reduced_ratio}')
-                L = max(len(ref), len(qry))
-                f.write(f'{total_segments} homologous segments found\n')
-                f.write('printing homologous segments set:\n\n')
-                for i, segment_set in enumerate(homologous_segments_sets):
-                    f.write(f'set {i}:\n')
-                    f.write(f'num of segment in set: {segment_set.count}\n')
-                    f.write(f'offset: {segment_set.offset}\n')
-                    eff_l = effective_length(segment_set.offset, len(ref), len(qry))
-                    f.write(f'effective length: {eff_l}\n')
-                    f.write(f'correlation: {c[segment_set.offset+(L - 1)]}\n')
-                    f.write(f'printing segment, (coord, score)\n')
-                    for i, coord in enumerate(segment_set.coords):
-                        f.write(f'({coord}, {segment_set.score[i]})  ')
-                    # ref_segment_index_start = segment_set.ref_segments[0][0]
-                    # qry_segment_index_start = segment_set.qry_segments[0][0]
-                    # segment_length = 16
-                    # f.write(f'\nref: {ref[segment_set.ref_segments[0][0]:segment_set.ref_segments[0][1]]}')
-                    # f.write(f'\nqry: {qry[segment_set.qry_segments[0][0]:segment_set.qry_segments[0][1]]}')
-                    # score_list = []
-                    # for i in range(segment_length):
-                    #     score_list.append(BLOSUM62[ref[ref_segment_index_start+i]][qry[qry_segment_index_start+i]])
-                    # score_list = np.array(score_list).astype(np.int32)
-                    # f.write(f'\nsco: {score_list}')
-                    f.write('\n\n')
-                f.write('\n')
-                f.write(f'keypoints:\n')
-                for k in key_points:
-                    f.writelines(str(k))
-            else:
-                f.write('no homologous segment found')
-    match = np.zeros((len(qry), len(ref)))
-    for i in range(len(qry)):
-        match[i] = (ref == np.full(len(ref), qry[i]))
-
-    score_mat = dp_engine2.score_matrix
-    path = np.array(dp_engine2.path)
-    if total_segments:
-        reduced_score_mat = dp_engine.score_matrix
-        reduced_path = np.array(dp_engine.path)
-        score = f'myscore/gt: {my_score}/{gt}'
-        plot_reduced(out_path_prefix, reduced_score_mat, score_mat, match, reduced_path, path,\
-            xcorr=c, name=f'{ref_serial}_{qry_serial}', \
-            title=f'{ref_serial} and {qry_serial}, threshold={threshold}', \
-            bottom_txt=score, all_segment_sets=homologous_segments_sets, show=args.draw)
-        return True, my_score, gt, reduced_ratio
-    else:
-        reduced_score_mat = None
-        reduced_path = None
-        score = f'gt: {gt}'
-        plot(out_path_prefix, score_mat, match, path, xcorr=c, name=f'{ref_serial}_{qry_serial}',\
-            title=f'{ref_serial} and {qry_serial}, threshold={threshold}', bottom_txt=score, show=args.draw)
-        return False, gt, gt, 0
-
 def test_protein_by_FASTA(ref_path, qry_path, args, out_path):
     '''
         run test_protein() by FASTA format
@@ -495,7 +401,8 @@ def test_protein_by_FASTA(ref_path, qry_path, args, out_path):
 
 def test_protein_by_TFA(tfa_path, out_path, args):
     '''
-        run test_protein() by BAliBASE 3.0 .tfa file
+        DEPRECATED!!!
+        run test_protein() by .tfa file(BAliBASE 3.0)
         param:
             tfa_path(str): path to .tfa file
             out_path(str): output file path
@@ -507,13 +414,16 @@ def test_protein_by_TFA(tfa_path, out_path, args):
             alignment count
     '''
     print(f'Testing TFA file: {tfa_path}')
-    des, seqs = read_BBS_tfa(tfa_path)
+    des, seqs = read_BBS_tfa(tfa_path) # same for vie file from homfam
     
     acc_list = []
     has_segment_count = 0
     pass_count = 0
     align_count = 0
     total_reduced_ratio = 0
+    total_reduced_cycle_ratio = 0
+    total_full_DP_cycle = 0
+    total_reduced_DP_cycle = 0
     if len(seqs) < 20:
         for j in range(len(seqs)):
             ref = seqs[j]
@@ -521,10 +431,17 @@ def test_protein_by_TFA(tfa_path, out_path, args):
             for i in range(j+1, len(seqs)):
                 qry = seqs[i]
                 qry_serial = des[i].replace("/", "_")
-                if os.path.exists(f'{out_path}/logfile_{ref_serial}_{qry_serial}.txt'): continue
-                has_segment, my_score, gt, reduced_ratio = test_protein(ref, qry, ref_serial, qry_serial, args, out_path, split_pass=True)
+                # print(f"check {f'{out_path}/pass/{ref_serial}_{qry_serial}.txt'}")
+                if args.resume and (os.path.exists(f'{out_path}/pass/{ref_serial}_{qry_serial}.txt') or 
+                                    os.path.exists(f'{out_path}/fail/{ref_serial}_{qry_serial}.txt')): 
+                    print('pass this alignment')
+                    continue
+                has_segment, my_score, gt, reduced_ratio, reduced_cycle_ratio, full_operation_cycles, reduced_operation_cycles = test_protein(ref, qry, ref_serial, qry_serial, args, out_path, split_pass=True)
                 align_count += 1
                 total_reduced_ratio += reduced_ratio
+                total_reduced_cycle_ratio += reduced_cycle_ratio
+                total_full_DP_cycle += full_operation_cycles
+                total_reduced_DP_cycle += reduced_operation_cycles
                 if has_segment:
                     acc = 1 - (abs(my_score)-abs(gt))/abs(gt)
                     has_segment_count += 1
@@ -533,27 +450,43 @@ def test_protein_by_TFA(tfa_path, out_path, args):
     else: # too much sequence, random select ref and qry
         for i in range(500):
             print(f'aligning alignment {i}')
-            ref_id = random.randint(0, len(seqs)-1)
-            qry_id = random.randint(0, len(seqs)-1)
+            a, b = random.randint(0, len(seqs)-1), random.randint(0, len(seqs)-1)
+            ref_id = min(a, b)
+            qry_id = max(a, b)
             ref = seqs[ref_id]
-            ref_serial = des[ref_id].replace("/", "_")
+            ref_serial = ref_id
             qry = seqs[qry_id]
-            qry_serial = des[qry_id].replace("/", "_")
-            if os.path.exists(f'{out_path}/logfile_{ref_serial}_{qry_serial}.txt'): continue
-            has_segment, my_score, gt, reduced_ratio = test_protein(ref, qry, ref_serial, qry_serial, args, out_path, split_pass=True)
+            qry_serial = qry_id
+            # print(f"check {f'{out_path}/pass/{ref_serial}_{qry_serial}.txt'}")
+            if args.resume and (os.path.exists(f'{out_path}/pass/{ref_serial}_{qry_serial}.txt') or 
+                                os.path.exists(f'{out_path}/fail/{ref_serial}_{qry_serial}.txt')): 
+                print('pass this alignment')
+                continue
+            has_segment, my_score, gt, reduced_ratio, reduced_cycle_ratio, full_operation_cycles, reduced_operation_cycles = test_protein(ref, qry, ref_serial, qry_serial, args, out_path, split_pass=True)
             align_count += 1
             total_reduced_ratio += reduced_ratio
+            total_reduced_cycle_ratio += reduced_cycle_ratio
+            total_full_DP_cycle += full_operation_cycles
+            total_reduced_DP_cycle += reduced_operation_cycles
+
             if has_segment:
-                    acc = 1 - (abs(my_score)-abs(gt))/abs(gt)
-                    has_segment_count += 1
-                    if evaluate(my_score, gt): pass_count += 1
-                    acc_list.append(acc)
+                acc = 1 - (abs(my_score)-abs(gt))/abs(gt)
+                has_segment_count += 1
+                if evaluate(my_score, gt): pass_count += 1
+                acc_list.append(acc)
     print(f'number of cases have homologous segment: {has_segment_count}')
     avg_reduced_ratio_among_all = 0
     avg_reduced_ratio_among_reduced = 0
+    avg_reduced_cycle_ratio_among_all = 0
+    avg_full_DP_cycle = 0
+    avg_reduced_DP_cycle = 0
     if has_segment_count:
         avg_reduced_ratio_among_all = total_reduced_ratio/align_count
         avg_reduced_ratio_among_reduced = total_reduced_ratio/has_segment_count
+        avg_reduced_cycle_ratio_among_all = total_reduced_cycle_ratio/align_count
+        avg_full_DP_cycle = total_full_DP_cycle/align_count
+        avg_reduced_DP_cycle = total_reduced_DP_cycle/align_count
+        
         pass_rate = pass_count/has_segment_count
         print(f'pass rate = {pass_count}/{has_segment_count} = {pass_rate}%')
         print(f'avg acc of total {len(acc_list)} samples which have homologous segment: {sum(acc_list)/len(acc_list)}')
@@ -566,12 +499,13 @@ def test_protein_by_TFA(tfa_path, out_path, args):
         f.write(f'2. Window size: {args.window_size}\n')
         f.write(f'3. Threshold: {args.threshold}\n')
         f.write(f'4. n: {args.n}\n')
-        if args.buffer < 1 and args.buffer > 0:
-            f.write(f'4. Buffer for keypoints: ((len(ref)+len(qry))/2) * {args.buffer}\n\n')
-        elif args.buffer > 1:
-            f.write(f'4. Buffer for keypoints: {args.buffer}\n\n')
-        elif args.buffer <= 0:
-            f.write(f'4. Buffer for keypoints: no buffer for keypoints\n\n')
+        f.write(f'5. B: {args.band}')
+        # if args.buffer < 1 and args.buffer > 0:
+        #     f.write(f'4. Buffer for keypoints: ((len(ref)+len(qry))/2) * {args.buffer}\n\n')
+        # elif args.buffer > 1:
+        #     f.write(f'4. Buffer for keypoints: {args.buffer}\n\n')
+        # elif args.buffer <= 0:
+        #     f.write(f'4. Buffer for keypoints: no buffer for keypoints\n\n')
 
         f.write(f'Number of cases have homologous segment: {has_segment_count}\n')
         if has_segment_count:
@@ -580,16 +514,20 @@ def test_protein_by_TFA(tfa_path, out_path, args):
             f.write(f'pass rate = {pass_count}/{has_segment_count} = {pass_count/has_segment_count}\n')
             f.write(f'avg reduced ratio among all alignment: {avg_reduced_ratio_among_all}\n')
             f.write(f'avg reduced ratio among reduced alignment: {avg_reduced_ratio_among_reduced}\n')
+            f.write(f'avg reduced cycle ratio among all alignment: {avg_reduced_cycle_ratio_among_all}\n')
+            f.write(f'avg full DP cycle among all alignment: {avg_full_DP_cycle}\n')
+            f.write(f'avg reduced DP cycle among all alignment: {avg_reduced_DP_cycle}\n')
             f.write('acc list:\n')
             for acc in acc_list:
                 f.write(str(acc))
                 f.write('\n')
     
-    return pass_count, has_segment_count, total_reduced_ratio, align_count
+    return pass_count, has_segment_count, total_reduced_ratio, align_count, total_reduced_cycle_ratio
 
 def tfa_experiment(args):
     '''
         run test on BAliBASE 3.0
+        DEPRECATED!!!
     '''
     data_set = str(args.data_set)
     tfa_path_prefix = f'../../data/bb3_release/RV{data_set}'
@@ -664,97 +602,303 @@ def tfa_experiment(args):
 
 def fasta_experiment(args):
     ref_fasta_file = '../../data/FASTA/protein/BBS/1bmr_'
-    ref_fasta_file = '../../data/FASTA/protein/BBS/1ac5_'
-    ref_fasta_file = '../../data/FASTA/protein/BBS/1ivy_A'
-    ref_fasta_file = '../../data/FASTA/protein/BBS/1ysc_'
-    ref_fasta_file = '../../data/FASTA/protein/BBS/1buc_A'
+    ref_fasta_file = '../../data/FASTA/protein/homfam/A0RR57_CAMFF_202-452'
+    ref_fasta_file = '../../data/FASTA/protein/ref'
+    ref_fasta_file = '../../data/FASTA/protein/homfam/C9P9N1_VIBFU_33-379'
     ref_fasta_file = '../../data/FASTA/protein/homfam/ref'
+    ref_fasta_file = '../../data/FASTA/protein/homfam/B7JD71_BACC0_2-459'
+    ref_fasta_file = '../../data/FASTA/protein/homfam/a'
+    ref_fasta_file = '../../data/FASTA/protein/homfam/c'
+
     qry_fasta_file = '../../data/FASTA/protein/BBS/NF31_NAEFO'
-    qry_fasta_file = '../../data/FASTA/protein/BBS/SCX6_CENLL'
-    qry_fasta_file = '../../data/FASTA/protein/BBS/CPVL_HUMAN'
-    qry_fasta_file = '../../data/FASTA/protein/BBS/RISC_HUMAN'
-    qry_fasta_file = '../../data/FASTA/protein/BBS/NF31_NAEFO'
-    qry_fasta_file = '../../data/FASTA/protein/BBS/1r2j_A'
-    qry_fasta_file = '../../data/FASTA/protein/BBS/Q8jzn5'
+    qry_fasta_file = '../../data/FASTA/protein/homfam/C6MSZ9_9DELT_610-880'
+    qry_fasta_file = '../../data/FASTA/protein/qry'
+    qry_fasta_file = '../../data/FASTA/protein/homfam/A6X9W0_CRAGI_2-192'
     qry_fasta_file = '../../data/FASTA/protein/homfam/qry'
+    qry_fasta_file = '../../data/FASTA/protein/homfam/C3E531_BACTU_2-459'
+    qry_fasta_file = '../../data/FASTA/protein/homfam/b'
+    qry_fasta_file = '../../data/FASTA/protein/homfam/d'
     out_path = '../out'
+    print('pair')
+    print(arg_string(args))
+    args.log_each_alignment = True
     test_protein_by_FASTA(ref_fasta_file, qry_fasta_file, args, out_path)
+
+def test_protein(ref: np.ndarray, qry: np.ndarray, ref_serial, qry_serial, args, out_path_prefix, split_pass=False):
+    '''
+        test on protein
+        fixed threshold
+        param:
+            ref: ref sequence
+            qry: qry sequence
+            ref_serial: ref seq's serial number (for output logfile name)
+            qry_serial: qry seq's serial number (for output logfile name) 
+            args: alignment argument (input by main.py argparser)
+            output_path_prefix: for output logfiles
+            split_pass: split pass/fail cases into different directory under [output_path_prefix]
+        output:
+            reducible(bool): if homologous segment exist -> reducible
+            reduced_score(reduced): calculated reduced score
+            golden_score(full): full DP score
+            reduced_cycle: operation cycle needed for PE running on reduced DP space
+            full_cycle: operation cycle neede for PE running on full DP space
+    '''
+    debug = False
+    homologous_threshold = args.threshold
+    homologous_window_size = args.window_size
+    alg = args.alg
+    buffer = args.buffer
+    data_type = args.data_type
+    n = args.n
+    use_polarity = args.use_polarity
+    quant_volume = args.quant_volume
+    band = args.band
+    
+    # calculating cross correlation
+    cor = CrossCorrelation(ref, qry, data_type=data_type, use_polarity=use_polarity, quant_volume=quant_volume)
+    c = cor.XCorr()
+    
+    # finding homologous segments
+    threshold = homologous_threshold
+    homologous = Homologous(ref, qry, c, threshold=threshold, data_type=data_type,\
+        n=n, wndw_size=homologous_window_size, B=args.band) # use origin sequence
+    total_segments, homologous_segments_sets = homologous.get_all_homologous_segments()
+    all_sets = copy.deepcopy(homologous_segments_sets)
+    reducible = total_segments != 0 # homologous segments exist
+    
+    dp_space_reduced_ratio = None
+    reduced_score = None
+    key_points = []
+    reduced_operation_cycles = None
+    if reducible:
+        if debug: print(f'Find total {total_segments} homologous segments!')
+        # print('Reducing search space...')
+        reducer = ReduceSearchSpace(all_sets, ref.shape[0], qry.shape[0], B=args.band)
+        key_points = reducer.reduce()
+        for idx, kp in enumerate(key_points): # check segments are sorted in ascending order
+            if idx == key_points.shape[0]-1: break
+            next_kp = key_points[idx+1]
+            assert kp[0] <= next_kp[0], f'error, {kp}, {next_kp}'
+            assert kp[1] <= next_kp[1], f'error, {kp}, {next_kp}'
+
+        # print('Running reduced DP...')
+        dp_engine = DPEngine(ref, qry, alg=alg, data_type=data_type, buffer=buffer, band=band)
+        reduced_score, dp_space_reduced_ratio = dp_engine.dp_in_reduced_space(key_points)
+        dp_engine.traceback()
+        reduced_operation_cycles = dp_engine.dp_operation_cycles
+    else:
+        if debug: print('No segments found!')
+        dp_space_reduced_ratio = 0
+    
+
+    # print('Running normal DP...')
+    dp_engine2 = DPEngine(ref, qry, alg=alg, data_type=data_type, band=band)
+    golden_score = dp_engine2.dp_normal()
+    dp_engine2.traceback()
+    full_operation_cycles = dp_engine2.dp_operation_cycles
+
+    # np.savetxt("reduced_dp_score_matrix.txt", dp_engine.aligner.score_matrix.astype(np.int32), fmt='%d')
+    # np.savetxt("full_dp_score_matrix.txt", dp_engine2.aligner.score_matrix.astype(np.int32), fmt='%d')
+    
+
+    if not reducible:
+        reduced_score = golden_score
+        reduced_operation_cycles = full_operation_cycles
+
+    reduced_cycle_ratio = (full_operation_cycles-reduced_operation_cycles)/full_operation_cycles
+    if reducible:
+        if split_pass:
+            if evaluate(reduced_score, golden_score, args.error_tolerance): out_path_prefix = f'{out_path_prefix}/pass'
+            else: out_path_prefix = f'{out_path_prefix}/fail'
+        # print(f'writing to {f"{out_path_prefix}/{ref_serial}_{qry_serial}.txt"}')
+        # logging single alignment log file
+        if args.log_each_alignment:
+            with open(f'{out_path_prefix}/{ref_serial}_{qry_serial}.txt', 'w') as f:
+                f.write(f'ref length: {len(ref)}\n')
+                f.write(f'qry length: {len(qry)}\n')
+                f.write(f'golden score: {golden_score}\n')
+                f.write(f'reduced score: {reduced_score}\n\n')
+                f.write(f'reduced ratio: {dp_space_reduced_ratio}\n')
+                f.write(f'full DP cycle: {full_operation_cycles}\n')
+                f.write(f'reduced DP cycle: {reduced_operation_cycles}\n')
+                f.write(f'reduced cycle ratio: {reduced_cycle_ratio}\n\n')
+                f.write(f'{total_segments} homologous segments found\n')
+                f.write('printing homologous segments set:\n')
+                for i, segment_set in enumerate(homologous_segments_sets):
+                    f.write(f'set {i}:\n')
+                    f.write(f'num of segment in set: {segment_set.count}\n')
+                    f.write(f'offset: {segment_set.offset}\n')
+                    eff_l = effective_length(segment_set.offset, len(ref), len(qry))
+                    f.write(f'effective length: {eff_l}\n')
+                    f.write(f'correlation: {c[segment_set.offset+(len(qry) - 1)]}\n')
+                    f.write(f'printing segment, (coord, score)\n')
+                    for i, coord in enumerate(segment_set.coords):
+                        f.write(f'({coord}, {segment_set.score[i]}) ')
+                    f.write('\n\n')
+                f.write('\n')
+                f.write(f'keypoints:\n')
+                f.write(f'total key points found: {len(key_points)}\n')
+                for k in key_points:
+                    f.writelines(str(k))
+    else: print('no segment found!')
+    match = np.zeros((len(qry), len(ref)))
+    for i in range(len(qry)):
+        match[i] = (ref == np.full(len(ref), qry[i]))
+
+    score_mat = dp_engine2.score_matrix
+    path = np.array(dp_engine2.path)
+    if reducible:
+        reduced_score_mat = dp_engine.score_matrix
+        reduced_path = np.array(dp_engine.path)
+        score = f'reduced_score/golden_score: {reduced_score}/{golden_score}'
+        if args.log_each_alignment:
+            plot_reduced(out_path_prefix, reduced_score_mat, score_mat, match, reduced_path, path,\
+                xcorr=c, name=f'{ref_serial}_{qry_serial}', \
+                title=f'{ref_serial} and {qry_serial}, threshold={threshold}', \
+                bottom_txt=score, all_segment_sets=homologous_segments_sets, show=args.draw)
+        if args.draw: dp_engine.aligner.show_trace_matrix()
+    # else:
+    #     score = f'golden score: {golden_score}'
+    #     plot(out_path_prefix, score_mat, match, path, xcorr=c, name=f'{ref_serial}_{qry_serial}',\
+    #         title=f'{ref_serial} and {qry_serial}, threshold={threshold}', bottom_txt=score, show=args.draw)
+    
+    return reducible, reduced_score, golden_score, full_operation_cycles, reduced_operation_cycles
+
+
+def test_on_vie(vie_path, out_path, args):
+    '''
+        run test_protein() by vie file(homfam)
+        param:
+            vie_path(str): path to .vie file
+            out_path(str): output file path
+            args: arguments
+        output:
+            pass count
+            has segment count
+            total reduced ratio
+            alignment count
+    '''
+    print(f'Testing vie file: {vie_path}')
+    des, seqs = read_BBS_tfa(vie_path)
+    
+    acc_list = []
+    reducible_alignment_count = 0
+    pass_count = 0
+    alignment_count = 0
+    total_full_DP_cycle = 0
+    total_reduced_DP_cycle = 0
+    total_sequence_length = 0
+
+    for i in range(500): # sample 500 pairs of sequences
+        print(f'aligning alignment {i}')
+        a, b = random.randint(0, len(seqs)-1), random.randint(0, len(seqs)-1)
+        ref_id = min(a, b)
+        qry_id = max(a, b)
+        ref = seqs[ref_id]
+        ref_serial = ref_id
+        qry = seqs[qry_id]
+        qry_serial = qry_id
+        # print(f"check {f'{out_path}/pass/{ref_serial}_{qry_serial}.txt'}")
+        # if file exist and resume, pass this alignment
+        if args.resume and (os.path.exists(f'{out_path}/pass/{ref_serial}_{qry_serial}.txt') or 
+                            os.path.exists(f'{out_path}/fail/{ref_serial}_{qry_serial}.txt')): 
+            print('pass this alignment')
+            continue
+        # if i != 440: continue
+        reducible, reduced_score, golden_score, full_operation_cycles, reduced_operation_cycles = test_protein(ref, qry, ref_serial, qry_serial, args, out_path, split_pass=True)
+        alignment_count += 1
+        total_full_DP_cycle += full_operation_cycles
+        total_reduced_DP_cycle += reduced_operation_cycles
+        total_sequence_length += len(ref)
+        total_sequence_length += len(qry)
+
+        if reducible:
+            acc = 1 - (abs(reduced_score)-abs(golden_score))/abs(golden_score)
+            reducible_alignment_count += 1
+            if evaluate(reduced_score, golden_score, args.error_tolerance): pass_count += 1
+            acc_list.append(acc)
+    print(f'number of cases have homologous segment: {reducible_alignment_count}')
+    avg_seqence_length = total_sequence_length/(alignment_count*2)
+    avg_reduced_cycle_ratio_among_all = 0
+    avg_full_DP_cycle = 0
+    avg_reduced_DP_cycle = 0
+    if reducible_alignment_count:
+        hit_rate = reducible_alignment_count/alignment_count
+        pass_rate = pass_count/reducible_alignment_count
+        avg_full_DP_cycle = total_full_DP_cycle/alignment_count
+        avg_reduced_DP_cycle = total_reduced_DP_cycle/alignment_count
+        avg_reduced_cycle_ratio_among_all = (total_full_DP_cycle-total_reduced_DP_cycle)/total_full_DP_cycle
+        if reducible_alignment_count:
+            print(f'----------------------------------------------------------')
+            print(f'Arguments:')
+            print(arg_string(args))
+            print(f'----------------------------------------------------------')
+            print(f'Result:')
+            print(f'1. Hit rate                 = {reducible_alignment_count}/{alignment_count} = {hit_rate:.3f}')
+            print(f'2. Pass rate                = {pass_count}/{reducible_alignment_count} = {pass_rate:.3f}')
+            print(f'3. Avg full DP cycle        = {avg_full_DP_cycle:.3f}')
+            print(f'4. avg reduced DP cycle     = {avg_reduced_DP_cycle:.3f}')
+            print(f'5. Avg reduced cycle ratio  = {avg_reduced_cycle_ratio_among_all:.3f}')
+            print(f'6. Avg sequence length      = {avg_seqence_length:.3f}')
+            print(f'----------------------------------------------------------')
+        # print(f'avg acc of total {len(acc_list)} samples which have homologous segment: {sum(acc_list)/len(acc_list)}')
+    with open(f'{out_path}/acc_log.txt', 'w') as f:
+        f.write(str(datetime.datetime.now().date()))
+        f.write('\n\n')
+        f.write(f'.vie path: {vie_path}\n\n')
+        f.write('Arguments:\n')
+        f.write(arg_string(args))
+        f.write('\n')
+
+        f.write(f'Number of cases have homologous segment: {reducible_alignment_count}\n')
+        if reducible_alignment_count:
+            # f.write(f'avg acc of total {len(acc_list)} samples which have homologous segment: {sum(acc_list)/len(acc_list)}\n\n')
+            f.write(f'1. Hit rate                 = {reducible_alignment_count}/{alignment_count} = {hit_rate:.3f}\n')
+            f.write(f'2. Pass rate                = {pass_count}/{reducible_alignment_count} = {pass_rate:.3f}\n')
+            f.write(f'3. Avg full DP cycle        = {avg_full_DP_cycle:.3f}\n')
+            f.write(f'4. avg reduced DP cycle     = {avg_reduced_DP_cycle:.3f}\n')
+            f.write(f'5. Avg reduced cycle ratio  = {avg_reduced_cycle_ratio_among_all:.3f}\n')
+            f.write(f'6. Avg sequence length      = {avg_seqence_length:.3f}\n')
+            f.write('\n')
+            f.write('Notes:\n')
+            f.write('1. Hit rate:  reducible alignments/total aligments  (i.e. homologous segments exist)\n')
+            f.write('2. Pass rate: accurate alignments/reducible aligments  (i.e. reduced score == golden score)\n')
+
+            # f.write('acc list:\n')
+            # for acc in acc_list:
+            #     f.write(str(acc))
+            #     f.write('\n')
+        else:
+            f.write('No reducible aligment found!')
+    
 
 def homfam_experiment(args):
     '''
         run test on homfam
     '''
     test_case = args.test_case
-    tfa_path_prefix = f'../../data/homfam'
-    if args.quant_volume == 0: out_path_prefix = f'../out/homfam/{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}/{test_case}'
+    vie_path_prefix = f'../../data/homfam'
+    if args.quant_volume == 0: 
+        out_path_prefix = f'../out/homfam_test/{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/band_{args.band}/{test_case}'
+        # out_path_prefix = f'../out/homfam/{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}/{test_case}'
+
     else: out_path_prefix = f'../out/homfam_quant{args.quant_volume}/{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}/{test_case}'
     print(f'writing to {out_path_prefix}')
 
-    total_pass_count = 0
-    total_has_segment_count = 0
-    total_reduced_ratio = 0
-    total_align_count = 0
-
     os.system(f'mkdir -p {out_path_prefix}/pass')
     os.system(f'mkdir -p {out_path_prefix}/fail')
-    tfa_path = f'{tfa_path_prefix}/{test_case}_test-only.vie'
+    vie_path = f'{vie_path_prefix}/{test_case}_test-only.vie'
     out_path = f'{out_path_prefix}'
-    pass_count, has_segment_count, reduced_ratio, align_count = test_protein_by_TFA(tfa_path, out_path, args)
-    total_pass_count += pass_count
-    total_has_segment_count += has_segment_count
-    total_reduced_ratio += reduced_ratio
-    total_align_count += align_count
+    test_on_vie(vie_path, out_path, args)
 
-    # calculate overall metrix
-    avg_pass_rate = total_pass_count/total_has_segment_count
-    avg_hit_rate = total_has_segment_count/total_align_count
-    avg_reduced_ratio_among_all = total_reduced_ratio/total_align_count
-    avg_reduced_ratio_among_reduced = total_reduced_ratio/total_has_segment_count
-
-    print(f'----------------------------------------------------------')
-    print(f'segment hit rate = has segment count / align count')
-    print(f'segment hit rate = {total_has_segment_count}/{total_align_count} = {avg_hit_rate}')
-    print(f'pass rate = pass count / has segment count')
-    print(f'pass rate = {total_pass_count}/{total_has_segment_count} = {avg_pass_rate}')
-    print(f'avg reduced ratio among all alignments: {avg_reduced_ratio_among_all}')
-    print(f'avg reduced ratio among reduced alignments: {avg_reduced_ratio_among_reduced}')
-    print(f'----------------------------------------------------------')
-    
-    # write log file
-    with open(f'{out_path_prefix}/acc_log.txt', 'w') as f:
-        f.write(str(datetime.datetime.now().date()))
-        f.write('\n\n')
-        f.write(f'Dataset: RV{args.data_set}\n')
-        f.write('\n')
-
-        f.write('Settings:\n')
-        f.write(f'1. Algorithm: {args.alg}\n')
-        f.write(f'2. Window size: {args.window_size}\n')
-        f.write(f'3. Threshold: {args.threshold}\n')
-        if args.buffer < 1 and args.buffer > 0:
-            f.write(f'4. Buffer for keypoints: ((len(ref)+len(qry))/2) * {args.buffer}\n')
-        elif args.buffer > 1:
-            f.write(f'4. Buffer for keypoints: {args.buffer}\n')
-        elif args.buffer <= 0:
-            f.write(f'4. Buffer for keypoints: no buffer for keypoints\n')
-        
-        f.write(f'5. n: {args.n}\n')
-        f.write(f'6. Use polarity for xcorr: {args.use_polarity}\n')
-        f.write(f'\n')
-
-        f.write(f'segment hit rate = has segment count / align count\n')
-        f.write(f'segment hit rate = {total_has_segment_count}/{total_align_count} = {avg_hit_rate}\n')
-        f.write(f'pass rate = pass count / has segment count\n')
-        f.write(f'pass rate = {total_pass_count}/{total_has_segment_count} = {avg_pass_rate}\n')
-        f.write(f'avg reduced ratio among all alignments = {avg_reduced_ratio_among_all}\n')
-        f.write(f'avg reduced ratio among reduced alignments = {avg_reduced_ratio_among_reduced}\n')
 
 def main():
+    np.set_printoptions(precision=4)
     random.seed(1225)
     VOLUME_QUANTIZE_OPTION = [-1, 0, 4, 8, 16, 32, 64]
     parser = argparse.ArgumentParser()
-    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='16')
-    parser.add_argument('--window_size', help='size of sliding window', type=int, default='20')
+    parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='18')
+    parser.add_argument('--window_size', help='size of sliding window', type=int, default='16')
     parser.add_argument('--alg', help='NW | SW', choices=ALGORITHMS, type=str, default='NW')
     parser.add_argument('--buffer', help='buffer around keypoint, < 1 then ratio to avg length, > 1 then exact width', type=float, default=32)
     parser.add_argument('--data_type', help='data type', choices=DATA_TYPES, type=str, default='PROTEIN')
@@ -765,6 +909,10 @@ def main():
     parser.add_argument('--test_case', help='homfam dataset id. e.g. aadh for aadh_test-only.vie', type=str, default='aadh')
     parser.add_argument('--use_polarity', help='use polarity for xcorr as well', type=bool, default=False)
     parser.add_argument('--quant_volume', help='use quantized volume, 0 for no quantize', choices=VOLUME_QUANTIZE_OPTION, type=int, default=0)
+    parser.add_argument('--band', help='PE array length', type=int, default=32)
+    parser.add_argument('--resume', help='skip exist alignment if file found', type=bool, default=False)
+    parser.add_argument('--error_tolerance', help='range from [0, 1), tolerate error ratio', type=float, default=0)
+    parser.add_argument('--log_each_alignment', help='generate logfile & graph for each alignment', type=bool, default=False)
     args = parser.parse_args()
 
     show_args = True

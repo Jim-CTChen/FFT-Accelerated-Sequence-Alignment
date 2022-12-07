@@ -21,7 +21,8 @@ class CrossCorrelation(object):
 
 
         
-        self.seq1, self.seq2 = self._pad_seq(seq1, seq2)
+        # self.seq1, self.seq2 = self._pad_seq(seq1, seq2)
+        self.seq1, self.seq2 = seq1, seq2
         self.data_type = 0
         self.use_polarity = use_polarity
 
@@ -89,12 +90,29 @@ class CrossCorrelation(object):
             v.append(self.volume_mapping[symbol])
         return np.array(v)
 
-    def _pad_for_FFT(self, seq):
+    def _pad_for_FFT(self, seq1, seq2):
         '''
             pad for FFT (since numpy do circular FFT)
         '''
-        pad_seq = np.pad(seq, (0, len(seq)), mode='constant')
-        return pad_seq
+        L = 0
+        N, M = len(seq1), len(seq2)
+        if N+M < 4: L = 4
+        elif N+M < 8: L = 8
+        elif N+M < 16: L = 16
+        elif N+M < 32: L = 32
+        elif N+M < 64: L = 64
+        elif N+M < 128: L = 128
+        elif N+M < 256: L = 256
+        elif N+M < 512: L = 512
+        elif N+M < 1024: L = 1024
+        elif N+M < 2048: L = 2048
+        else:
+            print('sequence too long!')
+            quit()
+        seq1_pad = np.pad(seq1, (0, L-len(seq1)), mode='constant')
+        seq2_pad = np.pad(seq2, (0, L-len(seq2)), mode='constant')
+        
+        return seq1_pad, seq2_pad
 
     def _reverse_seq(self, seq):
         return np.flip(seq)
@@ -110,9 +128,8 @@ class CrossCorrelation(object):
         L = max(len(self.seq1), len(self.seq2))
 
         if self.data_type == self.DNA:
-            s1_FFT_pad = self._pad_for_FFT(self.seq1)
-            t1_FFT_pad = self._pad_for_FFT(self.seq2)
-
+            s1_FFT_pad, t1_FFT_pad = self._pad_for_FFT(self.seq1, self.seq2)
+            
             s1_A = self._seq2freq(s1_FFT_pad, DNA_4['A'])
             s1_T = self._seq2freq(s1_FFT_pad, DNA_4['T'])
             s1_C = self._seq2freq(s1_FFT_pad, DNA_4['C'])
@@ -179,8 +196,7 @@ class CrossCorrelation(object):
             return c
 
         elif self.data_type == self.RNA:
-            s1_FFT_pad = self._pad_for_FFT(self.seq1)
-            t1_FFT_pad = self._pad_for_FFT(self.seq2)
+            s1_FFT_pad, t1_FFT_pad = self._pad_for_FFT(self.seq1, self.seq2)
 
             s1_A = self._seq2freq(s1_FFT_pad, RNA_4['A'])
             s1_U = self._seq2freq(s1_FFT_pad, RNA_4['U'])
@@ -246,31 +262,33 @@ class CrossCorrelation(object):
             assert np.array_equiv(c_G, gt_G)
 
             return c
+        
         elif self.data_type == self.PROTEIN:
-            seq1_pad = self._pad_for_FFT(self.seq1)
-            seq2_pad = self._pad_for_FFT(self.seq2)
+            seq1_pad, seq2_pad = self._pad_for_FFT(self.seq1, self.seq2)
 
             seq1_p = self._seq2polarity(seq1_pad)
             seq2_p = self._seq2polarity(seq2_pad)
             seq1_v = self._seq2volume(seq1_pad)
             seq2_v = self._seq2volume(seq2_pad)
 
-            seq2_p_rev = self._reverse_seq(seq2_p)
-            seq2_v_rev = self._reverse_seq(seq2_v)
-
             seq1_p_fft = self._FFT(seq1_p)
-            seq2_p_fft = self._FFT(seq2_p_rev)
+            seq2_p_fft = self._FFT(seq2_p)
             seq1_v_fft = self._FFT(seq1_v)
-            seq2_v_fft = self._FFT(seq2_v_rev)
+            seq2_v_fft = self._FFT(seq2_v)
 
-            C_P = seq1_p_fft*seq2_p_fft
-            C_V = seq1_v_fft*seq2_v_fft
+            C_P = seq1_p_fft*np.conjugate(seq2_p_fft)
+            C_V = seq1_v_fft*np.conjugate(seq2_v_fft)
 
             c_p = self._iFFT(C_P)
             c_v = self._iFFT(C_V)
 
-            c_p = (np.roll(c_p, L)[:2*L-1])
-            c_v = (np.roll(c_v, L)[:2*L-1])
+            c_p = (np.roll(c_p, len(self.seq2)-1)[:len(self.seq1)+len(self.seq2)-1])
+            c_v = (np.roll(c_v, len(self.seq2)-1)[:len(self.seq1)+len(self.seq2)-1])
+            # print(c_v[0])
+            # print('volume correlation')
+            # for i in range(len(c_v)):
+            #     c_v[i] = round(c_v[i], 3)
+            # print(c_v.tolist())
 
             # print(f'c_p: {c_p.max()}')
             # print(f'c_v: {c_v.max()}')
@@ -284,10 +302,20 @@ class CrossCorrelation(object):
 
             gt_p = np.correlate(gt_seq1_p, gt_seq2_p, mode='full')
             gt_v = np.correlate(gt_seq1_v, gt_seq2_v, mode='full')
-
-            assert np.sum(c_p-gt_p)/len(c_p) < 1 # tolerate some minor error
-            assert np.sum(c_v-gt_v)/len(c_v) < 1 # tolerate some minor error
-
+            
+            # print(f"seq1 length {len(self.seq1)}")
+            # print(f"seq2 length {len(self.seq2)}")
+            # print(f"xcorr length {len(c_v)}")
+            # print("xcorr")
+            # print(c_v[:10])
+            # print("gt")
+            # print(gt_v[:10])
+            assert len(c_v) == len(gt_v)
+            assert len(c_p) == len(gt_p)
+            for i in range(len(gt_v)):
+                assert abs(c_v[i]-gt_v[i]) < 1 # tolerate some minor error
+            for i in range(len(gt_p)):
+                assert abs(c_p[i]-gt_p[i]) < 1 # tolerate some minor error
             if self.use_polarity: return 100*c_p+c_v
             else: return c_v
 

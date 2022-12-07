@@ -7,7 +7,7 @@ from config import BLOSUM62, AMINO_ACID_MAPPING, DATA_TYPES
 from tool import random_gen_seq
 
 class Homologous(object):
-    def __init__(self, ref: np.ndarray, qry: np.ndarray, cross_cor, data_type: str='DNA', threshold=180, n=16, wndw_size=30, l=150):
+    def __init__(self, ref: np.ndarray, qry: np.ndarray, cross_cor, data_type: str='DNA', threshold=180, n=16, wndw_size=30, l=150, B=32):
         # assert len(ref) == len(qry)
         assert type(ref) == np.ndarray 
         assert type(qry) == np.ndarray
@@ -24,6 +24,7 @@ class Homologous(object):
         self.n = n                      # check for top n cross-correlation value
         self.wndw_size = wndw_size      # window size for sliding window
         self.maximum_segment_length = l # maximum length for homologous segment)
+        self.B = B # num of PE in PE array
     
     def _get_score(self, ref: np.ndarray, qry: np.ndarray, mode='DOT', debug=False):
         '''
@@ -109,37 +110,42 @@ class Homologous(object):
             sliding_wndw_end_idx = min(self.ref_len, self.qry_len+abs_offset) - self.wndw_size
         # print(f'start: {sliding_wndw_start_idx}')
         # print(f'end: {sliding_wndw_end_idx}')
-        for i in range (sliding_wndw_start_idx, sliding_wndw_end_idx):
-            debug_ = False
-            # if offset == -241 and i == 241: print(f'sliding at {i}')
+
+        for i in range (sliding_wndw_start_idx, sliding_wndw_end_idx+1):
+            debug_ = True
+            # if debug_ and offset == 7 and i == 134: print(f'sliding at {i}')
             # if i == 281 and offset == -241: debug_ = True
             score = self._get_score(padded_ref[i:i+self.wndw_size], padded_qry[i:i+self.wndw_size], debug=debug_)
-            # if debug_:
+            # if debug_ and offset == 7 and i == 134:
             #     print(f'pad index: {i}, {i+self.wndw_size}')
             #     print(f'pad ref: {padded_ref[i:i+self.wndw_size]}')
             #     print(f'pad qry: {padded_qry[i:i+self.wndw_size]}')
             #     print(f'no pad: {i-241}, {i+self.wndw_size-241}')
             #     print(f'no pad ref: {self.ref[i-241:i+self.wndw_size-241]}')
             #     print(f'no pad qry: {self.qry[i:i+self.wndw_size]}')
+            #     print(f'score: {score}, threshold: {self.threshold}')
             ##### debug
             # print(score)
             #####
-            if score > self.threshold:
+            if score > self.threshold and (i-abs_offset) > self.B//2+2 and i > self.B//2+2:
                 score_list.append(score)
                 if offset < 0:
                     # print(f'offset: {offset}')
                     # print(f'append {i-offset}')
-                    ref_segment_list.append(i-abs_offset)
+                    if len(ref_segment_list) and (i-abs_offset)-ref_segment_list[-1] > 2:
+                        ref_segment_list.append(i-abs_offset)
                 else:
                     # print(f'offset: {offset}')
                     # print(f'append {i}')
-                    ref_segment_list.append(i)
+                    if len(ref_segment_list) and i-ref_segment_list[-1] > 2:
+                        ref_segment_list.append(i)
             
         ref_segments = [[i, i+self.wndw_size] for i in ref_segment_list]
 
         ##### debug
-        # print(f'ref: {ref_segments}')
-        # print(f'offset: {offset}')
+        # if offset == 7:
+        #     print(f'ref: {ref_segments}')
+        #     print(f'offset: {offset}')
         # score_list = np.array(score_list)
         # histogram, _ = np.histogram(score_list, [0, 5, 10, 15, 20, 25, 30, 35])
         # print(histogram)
@@ -147,16 +153,16 @@ class Homologous(object):
 
         # combine adjacent segments
         i = 0
-        for i in range(len(ref_segments)-1):
-            j = i+1
-            while j < len(ref_segments):
-                # combine
-                if (ref_segments[i][1] == ref_segments[j][0]) and (ref_segments[i][1] - ref_segments[i][0] != self.maximum_segment_length):
-                    ref_segments[i][1] = ref_segments[j][1]
-                    score_list[i] += score_list[j]
-                    del ref_segments[j]
-                    del score_list[j]
-                else: j += 1
+        # for i in range(len(ref_segments)-1):
+        #     j = i+1
+        #     while j < len(ref_segments):
+        #         # combine
+        #         if (ref_segments[i][1] == ref_segments[j][0]) and (ref_segments[i][1] - ref_segments[i][0] != self.maximum_segment_length):
+        #             ref_segments[i][1] = ref_segments[j][1]
+        #             score_list[i] += score_list[j]
+        #             del ref_segments[j]
+        #             del score_list[j]
+        #         else: j += 1
 
         ref_segments = np.array(ref_segments)
         score_list = np.array(score_list)
@@ -177,12 +183,18 @@ class Homologous(object):
         return arr
 
     def _get_top_offsets(self):
-        offset = self._zigzag(np.arange(-self.L+1, self.L))
-        xcross = self._zigzag(self.cross_cor)
-        offset = offset[xcross.argsort()[-self.n:]]
+        # offset = self._zigzag(np.arange(-self.L+1, self.L))
+        # xcross = self._zigzag(self.cross_cor)
+        # offset = offset[xcross.argsort()[-self.n:]]
 
-        # offset = self.cross_cor.argsort()[-self.n:] # get top n of offset (k)
-        # offset -= (self.L - 1)
+        offset = np.arange(-len(self.qry)+1, len(self.ref))
+        # print(f'ref len: {len(self.ref)}, qry len: {len(self.qry)}')
+        # print(f'offset len: {len(self.cross_cor)}')
+        # print(len(self.cross_cor))
+        # print(self.cross_cor.argsort()[-self.n:])
+        offset = offset[self.cross_cor.argsort()[-self.n:]] # get top n of offset (k)
+        offset = np.sort(offset)
+        # print(offset)
         return offset
         
     def get_all_homologous_segments(self) -> list:
@@ -190,6 +202,7 @@ class Homologous(object):
             return number of segments found & list of HomologousSegmentSet
         '''
         top_offsets = self._get_top_offsets()
+        # print(top_offsets)
         
         all_segment_set = []
         total_segments = 0
@@ -197,7 +210,7 @@ class Homologous(object):
             ref_segment_list, score_list = self._get_segment(offset)
             total_segments += ref_segment_list.shape[0]
             # save in np 2D array shape = (n, 2)
-            segment_set = HomologousSegmentSet(offset, ref_segment_list, score_list, self.cross_cor[offset+self.L-1])
+            segment_set = HomologousSegmentSet(offset, ref_segment_list, score_list, self.cross_cor[offset+self.qry-1])
             all_segment_set.append(segment_set)
             # segment_set.print_info()
         return total_segments, all_segment_set

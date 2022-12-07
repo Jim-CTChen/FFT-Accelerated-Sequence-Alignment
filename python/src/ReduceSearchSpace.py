@@ -6,15 +6,16 @@ class ReduceSearchSpace(object):
     '''
         homologous_segment_sets: list of HomologousSegmentSet
     '''
-    def __init__(self, homologous_segment_sets: list, ref_len, qry_len):
+    def __init__(self, homologous_segment_sets: list, ref_len, qry_len, B):
         self.homologous_segment_sets = homologous_segment_sets
         self.num_of_set = len(homologous_segment_sets)
         # self.sequence_length = l
         self.ref_len = ref_len
         self.qry_len = qry_len
+        self.B = B
     
     def _out_of_range(self, coord, current) -> bool:
-        if coord[0] > current[0] and coord[1] > current[1]: return False
+        if coord[0] > current[0]+2 and coord[1] > current[1]+2: return False
         else: return True
     
     def _get_candidate(self, coc:np.ndarray, coc_index:np.ndarray) -> list:
@@ -49,14 +50,33 @@ class ReduceSearchSpace(object):
             # add candidate to list
             candidate_index_list.append(sorted_coc_index[candidate_idx])
             candidate_list.append(sorted_coc[candidate_idx])
+            
+            candidate_x = sorted_coc[candidate_idx][0]
+            candidate_y = sorted_coc[candidate_idx][1]
+            # print(sorted_coc)
+            
+            temp_coc = []
+            temp_coc_index = []
+            
+            # remove coc that conflicts with candidate
+            for i in range(len(sorted_coc)):
+                if sorted_coc[i][0] > candidate_x and sorted_coc[i][1] > candidate_y:
+                    continue
+                elif sorted_coc[i][0] == candidate_x and sorted_coc[i][1] == candidate_y:
+                    continue
+                else:
+                    temp_coc.append(sorted_coc[i])
+                    temp_coc_index.append(sorted_coc_index[i])
+            sorted_coc = np.array(temp_coc)
+            sorted_coc_index = np.array(temp_coc_index)
 
             # since candidate has min y coord
             # and sorted_coc has been sorted by x
             # therefore, coc listed behind has >= x coord, and >= y coord
             # remove all of them
             # and also remove the candidate
-            sorted_coc_index = sorted_coc_index[:candidate_idx]
-            sorted_coc = sorted_coc[:candidate_idx]
+            # sorted_coc_index = sorted_coc_index[:candidate_idx]
+            # sorted_coc = sorted_coc[:candidate_idx]
         # print(candidate_list)
         # print(candidate_index_list)
 
@@ -69,7 +89,7 @@ class ReduceSearchSpace(object):
         '''
         # pointer for each set, set the pointer to last coord
         set_len = np.array([len(set) for set in self.homologous_segment_sets])
-        current_coord = (0, 0)
+        current_coord = (self.B//2, self.B//2)
 
         key_points = []
 
@@ -90,7 +110,14 @@ class ReduceSearchSpace(object):
                 for idx, set in enumerate(self.homologous_segment_sets):
                     if len(set) == 0: continue
                     print(f'next coord in set {idx}: {set.coords[0]}')
-
+            # if len(key_points) > 30 and len(key_points) < 35:
+            #     print(f'iteration: {it} ================')
+            #     it += 1
+            #     print(f'current coord: {current_coord}')
+            #     for idx, s in enumerate(self.homologous_segment_sets):
+            #         if len(s) == 0: continue
+            #         print(f'next coord in set {idx}: {s.coords[0]}')
+            #         print(f'length in set {idx}: {len(s)}')
             # get candidate
             coc = [] # candidate_of_candidate
             coc_set_idx = [] # record the segment set each coc comes from
@@ -109,6 +136,11 @@ class ReduceSearchSpace(object):
                 print(f'candidate: {candidate}')
                 print(f'candidate_set_idx: {candidate_set_idx}')
 
+            # if len(key_points) > 30 and len(key_points) < 35:
+            #     print(f'candidate of candidate (coc): {coc}')
+            #     print(f'coc\'s set index: {coc_set_idx}')
+            #     print(f'candidate: {candidate}')
+            #     print(f'candidate_set_idx: {candidate_set_idx}')
             # choosing path with bigger end pointer (more segment left on that segment set)
             choosed = set_len[candidate_set_idx].argmax()
             choosed_set = candidate_set_idx[choosed]
@@ -122,14 +154,14 @@ class ReduceSearchSpace(object):
             self.homologous_segment_sets[choosed_set].coords = self.homologous_segment_sets[choosed_set].coords[1:]
 
             # remove coord out of range by moving set pointers
-            for idx, set in enumerate(self.homologous_segment_sets):
-                while len(set) != 0 and self._out_of_range(set.coords[0], current_coord):
-                    set.coords = set.coords[1:]
+            for idx, s in enumerate(self.homologous_segment_sets):
+                while len(s) != 0 and self._out_of_range(s.coords[0], current_coord):
+                    s.coords = s.coords[1:]
                     
             # if all sets' ptr reach 0, then end
             # if (sum(set_len) == 0):
             #     break
-            set_len = np.array([len(set) for set in self.homologous_segment_sets])
+            set_len = np.array([len(s) for s in self.homologous_segment_sets])
 
         key_points = np.array(key_points)
 

@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 from config import NUCLEIC_ACID_MAPPING, AMINO_ACID_MAPPING, BLOSUM62, DATA_TYPES, ALGORITHMS
 from tool import random_gen_seq
 
@@ -12,7 +13,7 @@ class Aligner(object):
     DUMMY, DELETION, INSERTION, MATCH = range(4)
     NEG_INF = -99999999
 
-    def __init__(self, ref: np.ndarray, qry: np.ndarray, alg='SW', data_type='PROTEIN', buffer=1/4):
+    def __init__(self, ref: np.ndarray, qry: np.ndarray, alg='SW', data_type='PROTEIN', buffer=1/4, band=32):
         '''
             parameter:
             ref: np.ndarray, reference sequence
@@ -53,6 +54,10 @@ class Aligner(object):
         self.buffer = buffer
         self.path = []
 
+        self.B = band # num of PEs
+
+        self.operation_cycles = 0
+
     def _reset_matrix(self):
         self.trace_matrix.fill(self.DUMMY)
         if self.alg == 'SW':
@@ -64,11 +69,16 @@ class Aligner(object):
             self.insertion_matrix.fill(self.NEG_INF)
             self.deletion_matrix.fill(self.NEG_INF)
             self.score_matrix.fill(self.NEG_INF)
-            self.insertion_matrix[0][1] = self.gap_open_penalty
-            self.deletion_matrix[0][1] = self.gap_open_penalty
+            self.score_matrix[0][0] = 0
+            self.insertion_matrix[0][1] = self.NEG_INF
+            self.deletion_matrix[0][1] = self.NEG_INF
+            # self.insertion_matrix[0][1] = self.gap_open_penalty
+            # self.deletion_matrix[0][1] = self.gap_open_penalty
             self.score_matrix[0][1] = self.gap_open_penalty
-            self.insertion_matrix[1][0] = self.gap_open_penalty
-            self.deletion_matrix[1][0] = self.gap_open_penalty
+            self.insertion_matrix[1][0] = self.NEG_INF
+            self.deletion_matrix[1][0] = self.NEG_INF
+            # self.insertion_matrix[1][0] = self.gap_open_penalty
+            # self.deletion_matrix[1][0] = self.gap_open_penalty
             self.score_matrix[1][0] = self.gap_open_penalty
             for i in range(2, self.score_matrix.shape[0]):
                 self.insertion_matrix[i][0] = self.insertion_matrix[i-1][0] + self.gap_ext_penalty
@@ -143,6 +153,7 @@ class Aligner(object):
     def calculate_score_in_reduced_space(self, key_points: np.ndarray) -> int:
         '''
             key_points should be sorted by ascending order
+            deprecated!!!
         '''
         
         # check if key points are sorted by ascending order
@@ -256,6 +267,371 @@ class Aligner(object):
             score = self.score_matrix[len(self.qry)][len(self.ref)]
         return score, reduced_ratio
 
+    def PE(self, i, j):
+        i = int(i)
+        j = int(j)
+        # print(f'PE operating at ({i}, {j})')
+        if i < 1 or i > len(self.ref):
+            return
+        if j < 1 or j > len(self.qry):
+            return
+        
+        if self.trace_matrix[j][i] != self.DUMMY:
+            print(f'location ({i}, {j}) is not dummy!')
+        
+        if j != 1 and self.trace_matrix[j-1][i] == self.DUMMY:
+            self.insertion_matrix[j][i] = self.NEG_INF
+        else:
+            self.insertion_matrix[j][i] = max(self.insertion_matrix[j-1][i]+self.gap_ext_penalty, self.score_matrix[j-1][i]+self.gap_open_penalty)
+        
+        if i != 1 and self.trace_matrix[j][i-1] == self.DUMMY:
+            self.deletion_matrix[j][i] = self.NEG_INF
+        else:
+            self.deletion_matrix[j][i] = max(self.deletion_matrix[j][i-1]+self.gap_ext_penalty, self.score_matrix[j][i-1]+self.gap_open_penalty)
+
+        w = 0
+        if self.data_type == 'DNA' or self.data_type == 'RNA':
+            w = self.match_score if self.ref[i-1] == self.qry[j-1] else self.mismatch_score
+        elif self.data_type == 'PROTEIN':
+            w = BLOSUM62[self.ref[i-1]][self.qry[j-1]]
+        else:
+            print('Error occurs! No given data type!')
+            quit()
+        match_score = 0
+        if i != 1 and j != 1 and self.trace_matrix[j-1][i-1] == self.DUMMY:
+            match_score = self.NEG_INF
+        else:
+            match_score = self.score_matrix[j-1][i-1]+w
+
+        insertion = (self.insertion_matrix[j][i], self.INSERTION)
+        deletion  = (self.deletion_matrix[j][i], self.DELETION)
+        match = (match_score, self.MATCH)
+        # if i == 117 and j == 114:
+        #     print(insertion)
+        #     print(deletion)
+        #     print(match)
+
+        if self.alg == 'SW':
+            self.score_matrix[j][i], self.trace_matrix[j][i] = max(
+                match,
+                deletion,
+                insertion
+            )
+            if self.score_matrix[j][i] < 0: self.score_matrix[j][i] = 0
+        elif self.alg == 'NW':
+            self.score_matrix[j][i], self.trace_matrix[j][i] = max(
+                match,
+                deletion,
+                insertion
+            )
+        else:
+            print('Error occurs! No algorithm!')
+            quit()
+
+    def PE_array(self, i, j, wrap=False, upper_bound=0, lower_bound=0):
+        # print(f'operating on PE array at ({i}, {j}), upperbound={upper_bound}, lowerbound={lower_bound}')
+        self.operation_cycles += 1
+        if lower_bound < 1: lower_bound = 1
+        y_range = upper_bound-lower_bound+1
+        if not wrap:
+            for b in range(self.B):
+                self.PE(i+b, j-b)
+        else:
+            for b in range(self.B):
+                if j-b > upper_bound:
+                    self.PE(i+b+self.B, j-b-y_range)
+                else:
+                    self.PE(i+b, j-b)
+
+    def calculate_score_hardware(self) -> list:
+        self.operation_cycles = 0
+        self._reset_matrix()
+        (i, j) = (1, 1)
+        self.PE_array(i, j)
+        while True:
+            # print(f'current at ({i}, {j}), operation cycles: {self.operation_cycles}')
+            if len(self.ref)-i <= self.B-1:
+                while (i+j) < (len(self.ref)+len(self.qry)):
+                    j += 1
+                    self.PE_array(i, j)
+                break
+            else:
+                while j < len(self.qry)+self.B-1:
+                    j += 1
+                    self.PE_array(i, j, wrap=True, upper_bound=len(self.qry), lower_bound=1)
+                i += self.B
+                j = self.B
+                self.PE_array(i, j)
+        
+        score = None
+        if self.alg == 'SW':
+            score = self.score_matrix.max()
+        elif self.alg == 'NW':
+            score = self.score_matrix[len(self.qry)][len(self.ref)]
+        return score
+        
+    def calculate_score_hardware_reduced(self, key_points: np.ndarray) -> int:
+        self.operation_cycles = 0
+        debug = True
+        for idx, kp in enumerate(key_points):
+            if idx == key_points.shape[0]-1: break
+            next_kp = key_points[idx+1]
+            assert kp[0] <= next_kp[0], f'error, {kp}, {next_kp}'
+            assert kp[1] <= next_kp[1], f'error, {kp}, {next_kp}'
+        
+        self._reset_matrix()
+
+        end_point = np.array([[self.ref.shape[0], self.qry.shape[0]]])
+        key_points = np.concatenate((key_points, end_point), axis=0)
+
+        (i, j) = (1, 1)
+        last_key_point = [i, j]
+        self.PE(i, j)
+        if debug: print(f'ref, qry length = ({len(self.ref)}, {len(self.qry)})')
+        while j < self.B:
+            if j == len(self.qry): # reach bottom border -> go downward and end alignment
+                while (len(self.ref)+len(self.qry) > (i+j)):
+                    i += 1
+                    self.PE_array(i, j)
+                break
+            else:
+                j += 1
+                self.PE_array(i, j)
+        for key_point in key_points:
+            if len(self.qry)+len(self.ref) <= (i+j): break
+            if debug:
+                print(f'--- current key point: {key_point} ---')
+                print(f'current coord: ({i}, {j})')
+            case = 0
+            pos_i = (key_point[0]-i)%self.B
+            if key_point[0] == self.ref.shape[0] and key_point[1] == self.qry.shape[0]:
+                case = 5
+            elif key_point[0]-i >= 3*self.B//2:
+                if key_point[1]-j <= self.B//2+1: case = 1
+                elif pos_i >= self.B//2: case = 4
+                else: case = 3
+            elif (key_point[0]-i) - (key_point[1]-j) >= self.B-1: case = 1
+            else: case = 2
+            if debug:
+                print(f'pos_i: {pos_i}')
+                print(f'case: {case}')
+            
+            
+            if case == 1:
+                # SW rightward
+                i_bound = key_point[0]-key_point[1]+j-(self.B-1)
+                if debug: print(f'case 1, i bound = {i_bound}')
+                while i < i_bound:
+                    if i == len(self.ref)-self.B+1: # reach right border -> go downward and end alignment
+                        while (len(self.ref)+len(self.qry) > (i+j)):
+                            j += 1
+                            self.PE_array(i, j)
+                    else:
+                        i += 1
+                        self.PE_array(i, j)
+                    if (i+j) > (key_point[0]+key_point[1]): break
+                if debug: 
+                    print(f'current at ({i}, {j})')
+                # BSW
+                direction = True # 1 for rightward, 0 for downward
+                while (key_point[0]+key_point[1]) >= (i+j):
+                    if i == len(self.ref)-self.B+1: # reach right border -> go downward and end alignment
+                        while (len(self.ref)+len(self.qry) > (i+j)):
+                            j += 1
+                            self.PE_array(i, j)
+                    elif j == len(self.qry): # reach down border -> go rightward and end alignment
+                        while (len(self.ref)+len(self.qry) > (i+j)):
+                            i += 1
+                            self.PE_array(i, j)
+                    else: # do what algorithm should do
+                        if direction: i+=1 
+                        else: j+=1
+                        self.PE_array(i, j)
+                        direction = not direction
+                if debug: print(f'current at ({i}, {j})')
+                if (i+j) == (key_point[0]+key_point[1])+1:
+                    if key_point[0] != i+self.B//2-1 or key_point[1] != j-self.B//2:
+                        print('error!')
+                        exit()
+                    else: print('good')
+            elif case == 2:
+                # SW downward
+                j_bound = key_point[1]-key_point[0]+i+(self.B-1)
+                if debug: print(f'case2, j bound: {j_bound}')
+                while j < j_bound:
+                    if j == len(self.qry): # reach down border -> go rightward and end alignment
+                        while (len(self.ref)+len(self.qry) > (i+j)):
+                            i += 1
+                            self.PE_array(i, j)
+                    else: # do what algorithm should do
+                        j += 1
+                        self.PE_array(i, j)
+                    if (i+j) > (key_point[0]+key_point[1]): break
+                if debug: print(f'current at ({i}, {j})')
+                # BSW
+                direction = True # 1 for rightward, 0 for downward
+                while (key_point[0]+key_point[1]) >= (i+j):
+                    if i == len(self.ref)-self.B+1: # reach right border -> go downward and end alignment
+                        while (len(self.ref)+len(self.qry) > (i+j)):
+                            j += 1
+                            self.PE_array(i, j)
+                    elif j == len(self.qry): # reach down border -> go rightward and end alignment
+                        while (len(self.ref)+len(self.qry) > (i+j)):
+                            i += 1
+                            self.PE_array(i, j)
+                    else: # do what algorithm should do
+                        if direction: i+=1
+                        else: j+=1
+                        self.PE_array(i, j)
+                        direction = not direction
+                if debug: print(f'current at ({i}, {j})')
+                if (i+j) == (key_point[0]+key_point[1])+1:
+                    if key_point[0] != i+self.B//2-1 or key_point[1] != j-self.B//2:
+                        print('error!')
+                        exit()
+                    else: print('good')
+            elif case == 3:
+                j_bound = key_point[1]-pos_i-1
+                if debug: print(f'case 3, j bound = {j_bound}')
+
+                lower_bound = max(1, j-self.B+1)
+                while True:
+                    if key_point[0]-i >= 2*self.B:
+                        while j < j_bound+self.B-1:
+                            j += 1
+                            self.PE_array(i, j, wrap=True, upper_bound=j_bound, lower_bound=lower_bound)
+                        i += self.B
+                        j = lower_bound+self.B-1
+                        self.PE_array(i, j)
+                    else:
+                        while j < j_bound:
+                            j += 1
+                            self.PE_array(i, j)
+                        break
+                    if debug: print(f'current at ({i}, {j})')
+                
+                # do BSW
+                if debug: print(f'current at ({i}, {j})')
+                if debug: print('do BSW')
+                direction = True # 1 for rightward, 0 for downward
+                while (key_point[0]+key_point[1]) >= (i+j):
+                    if i == len(self.ref)-self.B+1: # reach right border -> go downward and end alignment
+                        while (len(self.ref)+len(self.qry) > (i+j)):
+                            j += 1
+                            self.PE_array(i, j)
+                    elif j == len(self.qry): # reach down border -> go rightward and end alignment
+                        while (len(self.ref)+len(self.qry) > (i+j)):
+                            i += 1
+                            self.PE_array(i, j)
+                    else: # do what algorithm should do
+                        if direction: i+=1
+                        else: j+=1
+                        self.PE_array(i, j)
+                        direction = not direction
+                if debug: print(f'current at ({i}, {j})')
+                if (i+j) == (key_point[0]+key_point[1])+1:
+                    if key_point[0] != i+self.B//2-1 or key_point[1] != j-self.B//2:
+                        print('error!')
+                        exit()
+                    else: print('good')
+            elif case == 4:
+                j_bound = min(key_point[1]+(self.B-pos_i)-1, len(self.qry))
+                if debug: print(f'case4, j bound: {j_bound}')
+                # do SW until key_point[0] - i < 2B
+                lower_bound = max(1, j-self.B+1)
+                while True:
+                    if key_point[0]-i >= self.B:
+                        while j < j_bound+self.B-1:
+                            j += 1
+                            self.PE_array(i, j, wrap=True, upper_bound=j_bound, lower_bound=lower_bound)
+                        i += self.B
+                        j = lower_bound+self.B-1
+                        self.PE_array(i, j)
+                    else:
+                        while j < j_bound:
+                            j += 1
+                            self.PE_array(i, j)
+                        break
+                    if debug: print(f'current at ({i}, {j})')   
+                
+                # do BSW
+                direction = True # 1 for rightward, 0 for downward
+                while (key_point[0]+key_point[1]) >= (i+j):
+                    if i == len(self.ref)-self.B+1: # reach right border -> go downward and end alignment
+                        while (len(self.ref)+len(self.qry) > (i+j)):
+                            j += 1
+                            self.PE_array(i, j)
+                    elif j == len(self.qry): # reach down border -> go rightward and end alignment
+                        while (len(self.ref)+len(self.qry) > (i+j)):
+                            i += 1
+                            self.PE_array(i, j)
+                    else: # do what algorithm should do
+                        if direction: i+=1
+                        else: j+=1
+                        self.PE_array(i, j)
+                        direction = not direction
+                if debug: print(f'current at ({i}, {j})')
+                if (i+j) == (key_point[0]+key_point[1])+1:
+                    if key_point[0] != i+self.B//2-1 or key_point[1] != j-self.B//2:
+                        print('error!')
+                        exit()
+                    else: print('good')
+            elif case == 5:
+                j_bound = len(self.qry)
+                lower_bound = max(1, j-self.B+1)
+                if debug: print(f'lower bound: {lower_bound}')
+                while True:
+                    if i+self.B > len(self.ref):
+                        if debug: print('last column')
+                        if debug: print(f'current at ({i}, {j})')
+                        while j < j_bound+self.B:
+                            j += 1
+                            self.PE_array(i, j)
+                            if (key_point[0]+key_point[1]) <= (i+j): break
+                        break
+                    else:
+                        if debug: print(f'current at ({i}, {j})')
+                        while j < j_bound+self.B-1:
+                            j += 1
+                            self.PE_array(i, j, wrap=True, upper_bound=j_bound, lower_bound=lower_bound)
+                            if (key_point[0]+key_point[1]) <= (i+j): break
+                        if debug: print(f'current at ({i}, {j})')
+                    if (key_point[0]+key_point[1]) <= (i+j): break
+                    i += self.B
+                    j = lower_bound+self.B-1
+                    self.PE_array(i, j)
+                    if debug: print(f'current at ({i}, {j})')
+            else:
+                print('something is wrong!!!')
+                quit()
+            if i == len(self.ref)-self.B+1: # reach right border -> go downward and end alignment
+                        while (len(self.ref)+len(self.qry) > (i+j)):
+                            j += 1
+                            self.PE_array(i, j)
+            elif j == len(self.qry): # reach down border -> go rightward and end alignment
+                while (len(self.ref)+len(self.qry) > (i+j)):
+                    i += 1
+                    self.PE_array(i, j)
+            if (len(self.ref)+len(self.qry) <= (i+j)):
+                break
+            last_key_point = key_point
+
+        # calculate reduce area
+        total_area = len(self.ref)*len(self.qry)
+        full_area = self.trace_matrix[1:, 1:]
+        reduced_area = (full_area == self.DUMMY).sum()
+        reduced_ratio = reduced_area/total_area
+
+        # set neg inf back to 0 for heat map illustration
+        self.score_matrix[self.score_matrix == self.NEG_INF] = 0
+
+        score = None
+        if self.alg == 'SW':
+            score = self.score_matrix.max()
+        elif self.alg == 'NW':
+            score = self.score_matrix[len(self.qry)][len(self.ref)]
+        return score, reduced_ratio
+
     def traceback(self):
         '''
             Find the optimal path through the matrix. 
@@ -268,25 +644,37 @@ class Aligner(object):
         elif self.alg == 'NW':
             x, y = self.ref.shape[0], self.qry.shape[0]
 
+        last_x, last_y = None, None
         while x > 1 or y > 1:
             if self.alg == 'SW' and not self.score_matrix[y][x]: break
+            # print(f'current location at ({x}, {y})')
             self.path.append([x, y])
             if self.trace_matrix[y][x] == self.MATCH:
                 aligned_ref.append(self.ref[x-1])
                 aligned_qry.append(self.qry[y-1])
+                last_x = x
+                last_y = y
                 x -= 1
                 y -= 1
             elif self.trace_matrix[y][x] == self.INSERTION:
                 aligned_ref.append(GAP_SYMBOL_MAPPING)
                 aligned_qry.append(self.qry[y-1])
+                last_x = x
+                last_y = y
                 y -= 1
             elif self.trace_matrix[y][x] == self.DELETION:
                 aligned_ref.append(self.ref[x-1])
                 aligned_qry.append(GAP_SYMBOL_MAPPING)
+                last_x = x
+                last_y = y
                 x -= 1
             else:
+                # print(f'ref len: {len(self.ref)}')
+                # print(f'qry len: {len(self.qry)}')
+                self.show_trace_matrix()
+                # if x == 240 and y == 60:
+                #     print(f'last location ({last_x}, {last_y}), trace: {self.trace_matrix[last_y][last_x]}')
                 assert False, f'something wrong when trace back with trace_matrix at (x, y) = ({x}, {y}), score: {self.score_matrix[y][x]}, trace: {self.trace_matrix[y][x]}'
-            
 
         aligned_ref = [str(s) for s in reversed(aligned_ref)]
         aligned_qry = [str(s) for s in reversed(aligned_qry)]
@@ -351,6 +739,10 @@ class Aligner(object):
         plt.imshow(self.score_matrix, cmap='hot', interpolation='nearest')
         plt.show()
         # plt.imsave('mat.jpg', self.score_matrix, cmap='hot')
+    
+    def show_trace_matrix(self):
+        plt.imshow(self.trace_matrix, cmap='hot')
+        plt.show()
         
     def format_alignment(self, seq):
         alignment = []
@@ -372,35 +764,98 @@ def plot(mat, trace, reduced_mat=None, reduced_trace=None):
     axs[1].scatter(reduced_trace[:, 0], reduced_trace[:, 1], s=3)
     plt.show()
 
-if __name__ == '__main__':
-    np.set_printoptions(suppress=True)
-
-    # test data 1, 109-1 special project data
-    print('=========== Test 1 ===========')
-    ref = np.loadtxt('../../data/109-1_data/s1.dat').flatten().astype(int)
-    qry = np.loadtxt('../../data/109-1_data/t1.dat').flatten().astype(int)
-    ans = '0x'
-    with open('../../data/109-1_data/golden1.dat', 'r') as f:
-        ans += f.readline()[:-1]
-    ans = int(ans, base=16)
-
-    # full DP
-    sw = Aligner(ref, qry, alg='NW')
+def test(ref, qry, band, key_points):
+    sw = Aligner(ref, qry, alg='SW', data_type='DNA', band=band)
     score = sw.calculate_score()
     sw.traceback()
     score_matrix = sw.score_matrix
     trace_path = np.array(sw.path)
-    reduced_sw = Aligner(ref, qry, alg='NW')
-    reduced_score = reduced_sw.calculate_score_in_reduced_space(np.array([[1, 1]]))
+
+    reduced_sw = Aligner(ref, qry, alg='SW', data_type='DNA', band=band)
+    reduced_score, _ = reduced_sw.calculate_score_hardware_reduced(key_points)
+    # reduced_score, _ = reduced_sw.calculate_score_in_reduced_space(np.array([[1, 1]]))
     reduced_sw.traceback()
     reduced_score_matrix = reduced_sw.score_matrix
     reduced_trace_path = np.array(reduced_sw.path)
     
     plot(score_matrix, trace_path, reduced_score_matrix, reduced_trace_path)
 
-    print(f'Final score: {score}')
-    print(f'Golden: {ans}')
-    quit()
+    return score, reduced_score
+
+if __name__ == '__main__':
+    np.set_printoptions(suppress=True)
+
+    # test data 1, 109-1 special project data
+    print('=========== Test 1 ===========')
+    ref = np.loadtxt('../../data/109-1_data/t1.dat').flatten().astype(int)
+    qry = np.loadtxt('../../data/109-1_data/s1.dat').flatten().astype(int)
+    ans = '0x'
+    with open('../../data/109-1_data/golden1.dat', 'r') as f:
+        ans += f.readline()[:-1]
+    ans = int(ans, base=16)
+
+    ref = np.array([0, 1, 2, 3, 0, 1, 2, 3])
+    qry = np.array([0, 1, 2, 3, 0, 1, 2, 3])
+
+    # case II
+    # score, reduced_score = test(ref, qry, band=4, key_points=np.array([[2, 2]]))
+    # print(f'Final score: {score}')
+    # print(f'Reduced score: {reduced_score}')
+
+
+    # case IV
+    # score, reduced_score = test(ref, qry, band=4, key_points=np.array([[7, 6]]))
+    # print(f'Final score: {score}')
+    # print(f'Reduced score: {reduced_score}')
+
+    # case I
+    # score, reduced_score = test(ref, qry, band=4, key_points=np.array([[8, 2]]))
+    # print(f'Final score: {score}')
+    # print(f'Reduced score: {reduced_score}')
+
+    # longer, 16x16
+    ref = np.array([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3])
+    qry = np.array([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3])
+    band = 4
+
+    # # case 2 + case 3
+    # score, reduced_score = test(ref, qry, band=band, key_points=np.array([[2, 2], [10, 10]]))
+    # print(f'Final score: {score}')
+    # print(f'Reduced score: {reduced_score}')
+
+    # # case 2 + case 1
+    # score, reduced_score = test(ref, qry, band=band, key_points=np.array([[2, 6], [10, 10]]))
+    # print(f'Final score: {score}')
+    # print(f'Reduced score: {reduced_score}')
+
+    # case 1 + case 3
+    # score, reduced_score = test(ref, qry, band=band, key_points=np.array([[6, 2], [10, 10]]))
+    # print(f'Final score: {score}')
+    # print(f'Reduced score: {reduced_score}')
+
+    # case 4 + case 
+    # score, reduced_score = test(ref, qry, band=band, key_points=np.array([[7, 4], [9, 5]]))
+    # print(f'Final score: {score}')
+    # print(f'Reduced score: {reduced_score}')
+
+
+    # ref = np.array([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3])
+    # qry = np.array([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3])
+    # score, reduced_score = test(ref, qry, band=band, key_points=np.array([[6, 4], [9, 7], [10, 16], [16, 22]]))
+    # print(f'Final score: {score}')
+    # print(f'Reduced score: {reduced_score}')
+    # band = 4
+
+    # quit()
+
+    
+
+
+    # df = pd.DataFrame (score_matrix)
+    # df.to_excel('my_score.xlsx', index=False)
+    # print(f'Final score: {score}')
+    # print(f'Reduced score: {reduced_score}')
+    # print(f'Golden: {ans}')
 
 
     # test data 2, 109-1 special project data
