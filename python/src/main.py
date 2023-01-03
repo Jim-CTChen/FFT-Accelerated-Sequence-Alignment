@@ -22,12 +22,13 @@ from tool import random_gen_seq, effective_length, evaluate
 '''
 
 def print_args(args):
-    print(f'threshold: {args.threshold}')
-    print(f'window_size: {args.window_size}')
     print(f'alg: {args.alg}')
-    print(f'buffer: {args.buffer}')
     print(f'data_type: {args.data_type}')
     print(f'n: {args.n}')
+    print(f'threshold: {args.threshold}')
+    print(f'window_size: {args.window_size}')
+    print(f'band (# of PEs): {args.band}')
+    print(f'buffer between key points: {args.buffer_between_keypoints}')
 
 def arg_string(args):
     arg_str = ''
@@ -500,12 +501,6 @@ def test_protein_by_TFA(tfa_path, out_path, args):
         f.write(f'3. Threshold: {args.threshold}\n')
         f.write(f'4. n: {args.n}\n')
         f.write(f'5. B: {args.band}')
-        # if args.buffer < 1 and args.buffer > 0:
-        #     f.write(f'4. Buffer for keypoints: ((len(ref)+len(qry))/2) * {args.buffer}\n\n')
-        # elif args.buffer > 1:
-        #     f.write(f'4. Buffer for keypoints: {args.buffer}\n\n')
-        # elif args.buffer <= 0:
-        #     f.write(f'4. Buffer for keypoints: no buffer for keypoints\n\n')
 
         f.write(f'Number of cases have homologous segment: {has_segment_count}\n')
         if has_segment_count:
@@ -531,7 +526,7 @@ def tfa_experiment(args):
     '''
     data_set = str(args.data_set)
     tfa_path_prefix = f'../../data/bb3_release/RV{data_set}'
-    out_path_prefix = f'../out/BAliBASE3.0/new/bbs_RV{data_set}_{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}'
+    out_path_prefix = f'../out/BAliBASE3.0/new/bbs_RV{data_set}_{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/band_{args.band}'
     print(f'writing to {out_path_prefix}')
 
     total_pass_count = 0
@@ -582,13 +577,7 @@ def tfa_experiment(args):
         f.write(f'1. Algorithm: {args.alg}\n')
         f.write(f'2. Window size: {args.window_size}\n')
         f.write(f'3. Threshold: {args.threshold}\n')
-        if args.buffer < 1 and args.buffer > 0:
-            f.write(f'4. Buffer for keypoints: ((len(ref)+len(qry))/2) * {args.buffer}\n')
-        elif args.buffer > 1:
-            f.write(f'4. Buffer for keypoints: {args.buffer}\n')
-        elif args.buffer <= 0:
-            f.write(f'4. Buffer for keypoints: no buffer for keypoints\n')
-        
+        f.write(f'4. # of PE: {args.band}')
         f.write(f'5. n: {args.n}\n')
         f.write(f'6. Use polarity for xcorr: {args.use_polarity}\n')
         f.write(f'\n')
@@ -608,6 +597,9 @@ def fasta_experiment(args):
     ref_fasta_file = '../../data/FASTA/protein/homfam/ref'
     ref_fasta_file = '../../data/FASTA/protein/homfam/B7JD71_BACC0_2-459'
     ref_fasta_file = '../../data/FASTA/protein/homfam/a'
+    ref_fasta_file = '../../data/FASTA/protein/homfam/e'
+    ref_fasta_file = '../../data/FASTA/protein/homfam/g'
+    ref_fasta_file = '../../data/FASTA/protein/homfam/1-ref'
     ref_fasta_file = '../../data/FASTA/protein/homfam/c'
 
     qry_fasta_file = '../../data/FASTA/protein/BBS/NF31_NAEFO'
@@ -617,7 +609,11 @@ def fasta_experiment(args):
     qry_fasta_file = '../../data/FASTA/protein/homfam/qry'
     qry_fasta_file = '../../data/FASTA/protein/homfam/C3E531_BACTU_2-459'
     qry_fasta_file = '../../data/FASTA/protein/homfam/b'
+    qry_fasta_file = '../../data/FASTA/protein/homfam/f'
+    qry_fasta_file = '../../data/FASTA/protein/homfam/h'
+    qry_fasta_file = '../../data/FASTA/protein/homfam/1-qry'
     qry_fasta_file = '../../data/FASTA/protein/homfam/d'
+
     out_path = '../out'
     print('pair')
     print(arg_string(args))
@@ -647,7 +643,7 @@ def test_protein(ref: np.ndarray, qry: np.ndarray, ref_serial, qry_serial, args,
     homologous_threshold = args.threshold
     homologous_window_size = args.window_size
     alg = args.alg
-    buffer = args.buffer
+    buffer = args.buffer_between_keypoints
     data_type = args.data_type
     n = args.n
     use_polarity = args.use_polarity
@@ -661,7 +657,7 @@ def test_protein(ref: np.ndarray, qry: np.ndarray, ref_serial, qry_serial, args,
     # finding homologous segments
     threshold = homologous_threshold
     homologous = Homologous(ref, qry, c, threshold=threshold, data_type=data_type,\
-        n=n, wndw_size=homologous_window_size, B=args.band) # use origin sequence
+        n=n, wndw_size=homologous_window_size, B=args.band, buffer=buffer) # use origin sequence
     total_segments, homologous_segments_sets = homologous.get_all_homologous_segments()
     all_sets = copy.deepcopy(homologous_segments_sets)
     reducible = total_segments != 0 # homologous segments exist
@@ -673,7 +669,7 @@ def test_protein(ref: np.ndarray, qry: np.ndarray, ref_serial, qry_serial, args,
     if reducible:
         if debug: print(f'Find total {total_segments} homologous segments!')
         # print('Reducing search space...')
-        reducer = ReduceSearchSpace(all_sets, ref.shape[0], qry.shape[0], B=args.band)
+        reducer = ReduceSearchSpace(all_sets, ref.shape[0], qry.shape[0], B=args.band, buffer=buffer)
         key_points = reducer.reduce()
         for idx, kp in enumerate(key_points): # check segments are sorted in ascending order
             if idx == key_points.shape[0]-1: break
@@ -682,7 +678,7 @@ def test_protein(ref: np.ndarray, qry: np.ndarray, ref_serial, qry_serial, args,
             assert kp[1] <= next_kp[1], f'error, {kp}, {next_kp}'
 
         # print('Running reduced DP...')
-        dp_engine = DPEngine(ref, qry, alg=alg, data_type=data_type, buffer=buffer, band=band)
+        dp_engine = DPEngine(ref, qry, alg=alg, data_type=data_type, band=band)
         reduced_score, dp_space_reduced_ratio = dp_engine.dp_in_reduced_space(key_points)
         dp_engine.traceback()
         reduced_operation_cycles = dp_engine.dp_operation_cycles
@@ -880,9 +876,8 @@ def homfam_experiment(args):
     vie_path_prefix = f'../../data/homfam'
     if args.quant_volume == 0: 
         out_path_prefix = f'../out/homfam_test/{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/band_{args.band}/{test_case}'
-        # out_path_prefix = f'../out/homfam/{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}/{test_case}'
 
-    else: out_path_prefix = f'../out/homfam_quant{args.quant_volume}/{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/buffer_{args.buffer}/{test_case}'
+    else: out_path_prefix = f'../out/homfam_quant{args.quant_volume}/{args.alg}/threshold_{args.threshold}_{args.window_size}/n_{args.n}/band_{args.band}/{test_case}'
     print(f'writing to {out_path_prefix}')
 
     os.system(f'mkdir -p {out_path_prefix}/pass')
@@ -900,7 +895,6 @@ def main():
     parser.add_argument('--threshold', help='thershold for homologous segment', type=int, default='18')
     parser.add_argument('--window_size', help='size of sliding window', type=int, default='16')
     parser.add_argument('--alg', help='NW | SW', choices=ALGORITHMS, type=str, default='NW')
-    parser.add_argument('--buffer', help='buffer around keypoint, < 1 then ratio to avg length, > 1 then exact width', type=float, default=32)
     parser.add_argument('--data_type', help='data type', choices=DATA_TYPES, type=str, default='PROTEIN')
     parser.add_argument('--n', help='choose n top offset for searching', type=int, default=4)
     parser.add_argument('--draw', help='draw plot or save plot', type=bool, default=False)
@@ -913,6 +907,7 @@ def main():
     parser.add_argument('--resume', help='skip exist alignment if file found', type=bool, default=False)
     parser.add_argument('--error_tolerance', help='range from [0, 1), tolerate error ratio', type=float, default=0)
     parser.add_argument('--log_each_alignment', help='generate logfile & graph for each alignment', type=bool, default=False)
+    parser.add_argument('--buffer_between_keypoints', help='leave buffer between two adjacent key point', type=int, default=4)
     args = parser.parse_args()
 
     show_args = True

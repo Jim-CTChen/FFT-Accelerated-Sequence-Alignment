@@ -3,7 +3,7 @@ from Aligner import Aligner
 from config import DATA_TYPES, ALGORITHMS
 
 class DPEngine(object):
-    def __init__(self, ref: np.ndarray, qry: np.ndarray, alg='SW', data_type='PROTEIN', buffer=1/4, band=32):
+    def __init__(self, ref: np.ndarray, qry: np.ndarray, alg='SW', data_type='PROTEIN', band=32):
         assert alg in ALGORITHMS
         assert data_type in DATA_TYPES
         self.ref = ref  # x axis
@@ -11,7 +11,7 @@ class DPEngine(object):
         self.key_points = None
         self.alg = alg
         self.band = band
-        self.aligner = Aligner(ref, qry, alg, data_type, buffer, band)
+        self.aligner = Aligner(ref, qry, alg, data_type, band)
         self.operation_cycles = 0 # cycle needed for aligner to DP
 
     def dp_in_reduced_space(self, key_points: np.ndarray) -> int:

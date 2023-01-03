@@ -4,45 +4,37 @@
 
 import numpy as np
 import random
+import os
 import sys
+sys.path.insert(1, '/Users/ctchen/Desktop/special_project/Lu/110/code/python/src')
 import cmath, math
 from quantize import float_to_fixed_bin
 from fft import DIF_FFT, DIF_iFFT
+from config import AMINO_ACID, VOLUME_MAPPING, VOLUME_MAPPING_32
+from CrossCorrelation import CrossCorrelation
+from Homologous import Homologous
 
-hardware_volume_mapping = [
-  0, 31, 55, 55, 54, 83, 132, 3, 96, 111, 111, 119, 111,
-  105, 56, 0, 33, 85, 124, 32, 61, 0, 84, 170, 84, 136, 84
-]
+# hardware_volume_mapping = list(VOLUME_MAPPING.values())
+hardware_volume_mapping = list(VOLUME_MAPPING_32.values())
 
-hardware_amino_mapping = {
-  '-': 0,
-  'A': 1,
-  'B': 2,
-  'C': 3,
-  'D': 4,
-  'E': 5,
-  'F': 6,
-  'G': 7,
-  'H': 8,
-  'I': 9,
-  'J': 10,
-  'K': 11,
-  'L': 12,
-  'M': 13,
-  'N': 14,
-  'O': 15,
-  'P': 16,
-  'Q': 17,
-  'R': 18,
-  'S': 19,
-  'T': 20,
-  'U': 21,
-  'V': 22,
-  'W': 23,
-  'X': 24,
-  'Y': 25,
-  'Z': 26,
-}
+def read_FASTA(path):
+  symbol = AMINO_ACID
+
+  sequence = []
+  with open(path, 'r') as f:
+    description = f.readline()[1:-1]
+    while True:
+      char = f.read(1)
+      if not char:
+        break
+      elif char == '\n':
+        continue
+      elif char not in symbol.keys():
+        raise ValueError(f'including unkown symbol "{char}"')
+      sequence.append(symbol[char])
+
+  sequence = np.array(sequence)
+  return sequence
 
 def Xcorr_sim(N=32):
   x = np.array([i+1 for i in range(N)])
@@ -100,72 +92,25 @@ def FFT_sim(N=32):
   golden_rfft = np.fft.rfft(x)
   print(golden_rfft)
 
-def gen_testcase_Xcorr(N=32):
-  random.seed(10)
-  MAX_DATA = 31
-  MIN_DATA = 0
-  # x = np.array([random.randint(MIN_DATA, MAX_DATA) for _ in range(N)])
-  # y = np.array([random.randint(MIN_DATA, MAX_DATA) for _ in range(N)])
-  x = np.array([hardware_volume_mapping[i%len(hardware_volume_mapping)] for i in range(N)])
-  y = np.array([hardware_volume_mapping[i%len(hardware_volume_mapping)] for i in range(N)])
-  x = np.pad(x, (0, N), 'constant', constant_values=0)
-  y = np.pad(y, (0, N), 'constant', constant_values=0)
-  x_bit = np.array([float_to_fixed_bin(i, 9, 0) for i in x])
-  y_bit = np.array([float_to_fixed_bin(i, 9, 0) for i in y])
-  
-  with open('pattern/seq1.txt', 'w') as f:
-    for i in range(len(x_bit)):
-      f.write(x_bit[i])
-      f.write(f" // {x[i]}")
-      f.write('\n')
-  with open('pattern/seq2.txt', 'w') as f:
-    for i in range(len(y_bit)):
-      f.write(y_bit[i])
-      f.write(f" // {y[i]}")
-      f.write('\n')
-  # print(np.correlate(x, y, "full"))
-  fft_x = np.fft.fft(np.array(x))
-  fft_y = np.fft.fft(np.array(y))
-  golden = fft_x*np.conj(fft_y)
-  golden_real = golden.real
-  golden_imag = golden.imag
-  ifft = golden_imag+golden_real*1j
-  golden = np.fft.fft(ifft) / N
-  golden_real = golden.imag
-  golden_imag = golden.real
-  golden_real_bit = np.array([float_to_fixed_bin(re, 50, 8) for re in golden_real])
-  golden_imag_bit = np.array([float_to_fixed_bin(im, 50, 8) for im in golden_imag])
-
-  with open('pattern/gold_real.txt', 'w') as f:
-    for i in range(len(golden_real_bit)):
-      f.write(golden_real_bit[i])
-      f.write(f" // {round(golden_real[i], 6)}")
-      f.write('\n')
-  
-  with open('pattern/gold_imag.txt', 'w') as f:
-    for i in range(len(golden_imag_bit)):
-      f.write(golden_imag_bit[i])
-      f.write(f" // {round(golden_imag[i], 6)}")
-      f.write('\n')
-
 def gen_testcase_FFT(N=32):
   random.seed(10)
-  MAX_DATA = 127
-  MIN_DATA = -128
-  # x = np.array([random.uniform(MIN_DATA, MAX_DATA) + random.uniform(MIN_DATA, MAX_DATA)*1j for _ in range(N)])
-  x = np.array([i for i in range(N)])
+  MAX_DATA = 31
+  MIN_DATA = -32
+
+  x = np.array([random.uniform(MIN_DATA, MAX_DATA) + random.uniform(MIN_DATA, MAX_DATA)*1j for _ in range(N)])
+  # x = np.array([i for i in range(N)])
   x_real = x.real
   x_imag = x.imag
   x_real_bit = np.array([float_to_fixed_bin(re, 32, 8) for re in x_real])
   x_imag_bit = np.array([float_to_fixed_bin(im, 32, 8) for im in x_imag])
   
-  with open('pattern/pat_real.txt', 'w') as f:
+  with open('pattern/FFT/pat_real.txt', 'w') as f:
     for i in range(len(x_real_bit)):
       f.write(x_real_bit[i])
       f.write(f" // {round(x_real[i], 6)}")
       f.write('\n')
   
-  with open('pattern/pat_imag.txt', 'w') as f:
+  with open('pattern/FFT/pat_imag.txt', 'w') as f:
     for i in range(len(x_imag_bit)):
       f.write(x_imag_bit[i])
       f.write(f" // {round(x_imag[i], 6)}")
@@ -177,50 +122,78 @@ def gen_testcase_FFT(N=32):
   golden_real_bit = np.array([float_to_fixed_bin(re, 32, 8) for re in golden_real])
   golden_imag_bit = np.array([float_to_fixed_bin(im, 32, 8) for im in golden_imag])
 
-  with open('pattern/gold_real.txt', 'w') as f:
+  with open('pattern/FFT/gold_real.txt', 'w') as f:
     for i in range(len(golden_real_bit)):
       f.write(golden_real_bit[i])
       f.write(f" // {round(golden_real[i], 6)}")
       f.write('\n')
   
-  with open('pattern/gold_imag.txt', 'w') as f:
+  with open('pattern/FFT/gold_imag.txt', 'w') as f:
     for i in range(len(golden_imag_bit)):
       f.write(golden_imag_bit[i])
       f.write(f" // {round(golden_imag[i], 6)}")
       f.write('\n')
   
-def gen_testcase_max_offset(N=32):
-  seq1 = "GGSLARTEATGYGSVYFANEMLKKSGGSLEGKKCSVSGAGNVAIYTVEKLYEFGALPITVSDSTGFVYDKDGIDTQLLKRLKEVERKGLSDYTDFRKNAVFTPVKAYKEGTNGVWSVPCDAAFPSATQNELHLVDIKTLYNNGCRLVCEGANMPSTLDAIDFMISKKDFLFGPAKAANAGGVATSGLEMAQNASMQKWSFEEVDKKLHDIMRNIFNESYDTSVEFGDAGNLVLGANIAGFRKVADAMIDQG"
-  seq2 = "GINHKEFGVTSTGVVRFAEITMADLGIDMVNHPFSVKFTGGPNGDVAGNAMRIMLERYPRMQIRLILDGTAALYDPKGARHGELERILLKEDLDGFNPQALHEGGFMLFRSGSRTEGLRTLYRKATMGGDGLTEQWISIDEFSREFGDLPFTTQADLFIPGGGRPETIDARNWERFFLPDGTPSARAIIEGANSFITPDARVQLQKRGVIIMRDASANKCGVISSSYEIIANLLMADAEFLAEKEEYVGGVIAILEKR"
-  # N = 160 # seq1
-  # M = 100 # seq2
-  N = len(seq1)
-  M = len(seq2)
+def gen_testcase_for_max_offset_and_xcorr(case_num):
   random.seed(10)
-  # x = np.array([random.randint(0, len(hardware_volume_mapping)-1) for i in range(N)])
-  # y = np.array([random.randint(0, len(hardware_volume_mapping)-1) for i in range(M)])
-  x = [hardware_amino_mapping[f'{c}'] for c in seq1]
-  y = [hardware_amino_mapping[f'{c}'] for c in seq2]
-  # x = np.array([i%len(hardware_volume_mapping) for i in range(N)])
-  # y = np.array([i%len(hardware_volume_mapping) for i in range(M)])
-  x_bit = np.array([float_to_fixed_bin(i, 9, 0) for i in x])
-  y_bit = np.array([float_to_fixed_bin(i, 9, 0) for i in y])
-  
-  with open('pattern/max_offset_pat1.txt', 'w') as f:
+
+  # case 0
+  if case_num == 0:
+    N = 32
+    M = 32
+    ref = np.array([i%len(hardware_volume_mapping) for i in range(N)])
+    qry = np.array([i%len(hardware_volume_mapping) for i in range(N)])
+  # case 1
+  elif case_num == 1:
+    N = 32
+    M = 32
+    ref = np.array([random.randint(0, len(hardware_volume_mapping)-1) for i in range(N)])
+    qry = np.array([random.randint(0, len(hardware_volume_mapping)-1) for i in range(M)])
+  # case 2
+  elif case_num == 2:
+    N = 64
+    M = 64
+    ref = np.array([random.randint(0, len(hardware_volume_mapping)-1) for i in range(N)])
+    qry = np.array([random.randint(0, len(hardware_volume_mapping)-1) for i in range(M)])
+  elif case_num == 3:
+    N = 93
+    M = 82
+    ref = np.array([random.randint(0, len(hardware_volume_mapping)-1) for i in range(N)])
+    qry = np.array([random.randint(0, len(hardware_volume_mapping)-1) for i in range(M)])
+  elif case_num == 4:
+    N = 201
+    M = 91
+    ref = np.array([random.randint(0, len(hardware_volume_mapping)-1) for i in range(N)])
+    qry = np.array([random.randint(0, len(hardware_volume_mapping)-1) for i in range(M)])
+  elif case_num == 5:
+    ref = read_FASTA('../../../data/FASTA/protein/homfam/c')
+    qry = read_FASTA('../../../data/FASTA/protein/homfam/d')
+    N = len(ref)
+    M = len(qry)
+  elif case_num == 6:
+    N = 4
+    M = 4
+    ref = np.array([i%len(hardware_volume_mapping) for i in range(N)])
+    qry = np.array([i%len(hardware_volume_mapping) for i in range(N)])
+
+  # write ref, qry
+  ref_bit = np.array([float_to_fixed_bin(i, 9, 0) for i in ref])
+  qry_bit = np.array([float_to_fixed_bin(i, 9, 0) for i in qry])
+  with open('pattern/max_offset/ref.txt', 'w') as f:
     f.write(float_to_fixed_bin(N, 9, 0))
     f.write('\n')
-    for i in range(len(x_bit)):
-      f.write(x_bit[i])
-      f.write(f" // {round(x[i], 6)}")
+    for i in range(len(ref_bit)):
+      f.write(ref_bit[i])
+      f.write(f" // {round(ref[i], 6)}")
       f.write('\n')
-  
-  with open('pattern/max_offset_pat2.txt', 'w') as f:
+  with open('pattern/max_offset/qry.txt', 'w') as f:
     f.write(float_to_fixed_bin(M, 9, 0))
     f.write('\n')
-    for i in range(len(y_bit)):
-      f.write(y_bit[i])
-      f.write(f" // {round(y[i], 6)}")
+    for i in range(len(qry_bit)):
+      f.write(qry_bit[i])
+      f.write(f" // {round(qry[i], 6)}")
       f.write('\n')
+
   L = 8
   if M+N > 256: L = 512
   elif M+N > 128: L = 256
@@ -229,53 +202,90 @@ def gen_testcase_max_offset(N=32):
   elif M+N > 16: L = 32
   elif M+N > 8: L = 16
 
-  x_pad = np.pad(x, (0, L-N), 'constant', constant_values=0)
-  y_pad = np.pad(y, (0, L-M), 'constant', constant_values=0)
-  x_volume = [hardware_volume_mapping[i] for i in x_pad]
-  y_volume = [hardware_volume_mapping[i] for i in y_pad]
-  x_volume_bit = np.array([float_to_fixed_bin(i, 9, 0) for i in x_volume])
-  y_volume_bit = np.array([float_to_fixed_bin(i, 9, 0) for i in y_volume])
-  with open('pattern/xcorr_seq1.txt', 'w') as f:
-    for i in range(len(x_volume_bit)):
-      f.write(x_volume_bit[i])
-      f.write(f" // {x_volume[i]}")
+  ref_pad = np.pad(ref, (0, L-N), 'constant', constant_values=0)
+  qry_pad = np.pad(qry, (0, L-M), 'constant', constant_values=0)
+  ref_volume = [hardware_volume_mapping[i] for i in ref_pad]
+  qry_volume = [hardware_volume_mapping[i] for i in qry_pad]
+  ref_volume_bit = np.array([float_to_fixed_bin(i, 9, 0) for i in ref_volume])
+  qry_volume_bit = np.array([float_to_fixed_bin(i, 9, 0) for i in qry_volume])
+  with open('pattern/xcorr/ref_volume.txt', 'w') as f:
+    for i in range(len(ref_volume_bit)):
+      f.write(ref_volume_bit[i])
+      f.write(f" // {ref_volume[i]}")
       f.write('\n')
-  with open('pattern/xcorr_seq2.txt', 'w') as f:
-    for i in range(len(y_volume_bit)):
-      f.write(y_volume_bit[i])
-      f.write(f" // {y_volume[i]}")
+  with open('pattern/xcorr/qry_volume.txt', 'w') as f:
+    for i in range(len(qry_volume_bit)):
+      f.write(qry_volume_bit[i])
+      f.write(f" // {qry_volume[i]}")
       f.write('\n')
 
-  fft_x = np.fft.fft(np.array(x_volume))
-  fft_y = np.fft.fft(np.array(y_volume))
+  homologous_threshold = 18
+  homologous_window_size = 16
+  alg = 'NW'
+  data_type = 'PROTEIN'
+  n = 4
+  use_polarity = False
+  quant_volume = 0
+  band = 32
+
+  cor = CrossCorrelation(ref, qry, data_type=data_type, use_polarity=use_polarity, quant_volume=quant_volume)
+  xcorr = cor.XCorr()
+  threshold = homologous_threshold
+  homologous = Homologous(ref, qry, xcorr, threshold=threshold, data_type=data_type,\
+      n=n, wndw_size=homologous_window_size, B=band) # use origin sequence
+  _, homologous_segments_sets = homologous.get_all_homologous_segments()
+  offsets = [s.offset for s in homologous_segments_sets]
+
+  offsets_bit = [float_to_fixed_bin(k, 11, 0) for k in offsets]
+  with open('pattern/max_offset/golden.txt', 'w') as f:
+    for i in range(len(offsets_bit)):
+      f.write(offsets_bit[i])
+      f.write(f"  // {offsets[i]}")
+      f.write('\n')
+
+  fft_x = np.fft.fft(np.array(ref_volume))
+  fft_y = np.fft.fft(np.array(qry_volume))
   golden = fft_x*np.conj(fft_y)
   golden_real = golden.real
   golden_imag = golden.imag
   ifft = golden_imag+golden_real*1j
-  xcorr = np.fft.fft(ifft) / L
+  # print(golden)
+  ifft_out = np.fft.fft(ifft)
+  xcorr = ifft_out/L
+  # xcorr = np.fft.fft(ifft) / L
   xcorr = xcorr.imag
-  # print(np.fft.ifft(golden))
-  top_k = xcorr.argsort()[-4:][::-1]
-  # print(len(seq1))
-  # print(len(seq2))
-  # print(len(xcorr))
 
-  for i in range(len(top_k)):
-    if top_k[i] > N:
-      top_k[i] = top_k[i] - L
-  top_k_bit = [float_to_fixed_bin(k, 11, 0) for k in top_k]
+  mul_input_real_bit = np.array([float_to_fixed_bin(score, 60, 8) for score in golden_real])
+  mul_input_imag_bit = np.array([float_to_fixed_bin(score, 60, 8) for score in golden_imag])
+  with open('pattern/xcorr/mul_input_real.txt', 'w') as f:
+    for i in range(len(mul_input_real_bit)):
+      f.write(mul_input_real_bit[i])
+      f.write(f" // {round(golden_real[i], 6)}")
+      f.write('\n')
+  with open('pattern/xcorr/mul_input_imag.txt', 'w') as f:
+    for i in range(len(mul_input_imag_bit)):
+      f.write(mul_input_imag_bit[i])
+      f.write(f" // {round(golden_imag[i], 6)}")
+      f.write('\n')
+
+  ifft_output_real_bit = np.array([float_to_fixed_bin(score, 60, 8) for score in ifft_out.real])
+  ifft_output_imag_bit = np.array([float_to_fixed_bin(score, 60, 8) for score in ifft_out.imag])
+  with open('pattern/xcorr/ifft_output_real.txt', 'w') as f:
+    for i in range(len(ifft_output_real_bit)):
+      f.write(ifft_output_real_bit[i])
+      f.write(f" // {round(ifft_out.real[i], 6)}")
+      f.write('\n')
+  with open('pattern/xcorr/ifft_output_imag.txt', 'w') as f:
+    for i in range(len(ifft_output_imag_bit)):
+      f.write(ifft_output_imag_bit[i])
+      f.write(f" // {round(ifft_out.imag[i], 6)}")
+      f.write('\n')
 
   xcorr_bit = np.array([float_to_fixed_bin(score, 60, 8) for score in xcorr])
-  with open('pattern/xcorr_golden.txt', 'w') as f:
+  with open('pattern/xcorr/golden.txt', 'w') as f:
     for i in range(len(xcorr_bit)):
       f.write(xcorr_bit[i])
       f.write(f" // {round(xcorr[i], 6)}")
-      f.write('\n')
-
-  with open('pattern/max_offset_golden.txt', 'w') as f:
-    for i in range(len(top_k_bit)):
-      f.write(top_k_bit[i])
-      f.write(f"  // {top_k[i]}")
       f.write('\n')
 
 def printWN(N=32, write=True):
@@ -319,13 +329,15 @@ def printWN(N=32, write=True):
   pass
 
 def main():
+  os.system(f'mkdir -p ./pattern/max_offset')
+  os.system(f'mkdir -p ./pattern/xcorr')
+  os.system(f'mkdir -p ./pattern/FFT')
   N = 32
   if len(sys.argv) >= 2: N = int(sys.argv[1])
   # FFT_sim(N)
   # Xcorr_sim(N)
-  # gen_testcase_FFT(N)
-  # gen_testcase_Xcorr(N)
-  gen_testcase_max_offset(N)
+  gen_testcase_FFT(N)
+  # gen_testcase_for_max_offset_and_xcorr(case_num=6)
   # printWN(N, True)
   
 

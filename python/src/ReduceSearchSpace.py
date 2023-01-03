@@ -6,16 +6,17 @@ class ReduceSearchSpace(object):
     '''
         homologous_segment_sets: list of HomologousSegmentSet
     '''
-    def __init__(self, homologous_segment_sets: list, ref_len, qry_len, B):
+    def __init__(self, homologous_segment_sets: list, ref_len, qry_len, B=32, buffer=4):
         self.homologous_segment_sets = homologous_segment_sets
         self.num_of_set = len(homologous_segment_sets)
         # self.sequence_length = l
         self.ref_len = ref_len
         self.qry_len = qry_len
         self.B = B
+        self.buffer=buffer
     
     def _out_of_range(self, coord, current) -> bool:
-        if coord[0] > current[0]+2 and coord[1] > current[1]+2: return False
+        if coord[0] > current[0]+self.buffer and coord[1] > current[1]+self.buffer: return False
         else: return True
     
     def _get_candidate(self, coc:np.ndarray, coc_index:np.ndarray) -> list:
@@ -79,6 +80,11 @@ class ReduceSearchSpace(object):
             # sorted_coc = sorted_coc[:candidate_idx]
         # print(candidate_list)
         # print(candidate_index_list)
+        candidate_index_list = np.array(candidate_index_list)
+        candidate_list = np.array(candidate_list)
+        ind = np.argsort(candidate_index_list)
+        candidate_index_list = candidate_index_list[ind]
+        candidate_list = candidate_list[ind]
 
         return candidate_list, candidate_index_list
 
@@ -130,11 +136,11 @@ class ReduceSearchSpace(object):
             coc_set_idx = np.array(coc_set_idx)
             candidate, candidate_set_idx = self._get_candidate(coc, coc_set_idx)
 
-            if verbose:
-                print(f'candidate of candidate (coc): {coc}')
-                print(f'coc\'s set index: {coc_set_idx}')
-                print(f'candidate: {candidate}')
-                print(f'candidate_set_idx: {candidate_set_idx}')
+            # if verbose:
+                # print(f'candidate of candidate (coc): {coc}')
+                # print(f'coc\'s set index: {coc_set_idx}')
+                # print(f'candidate: {candidate}')
+                # print(f'candidate_set_idx: {candidate_set_idx}')
 
             # if len(key_points) > 30 and len(key_points) < 35:
             #     print(f'candidate of candidate (coc): {coc}')
@@ -146,6 +152,10 @@ class ReduceSearchSpace(object):
             choosed_set = candidate_set_idx[choosed]
             new_key_point = candidate[choosed]
             key_points.append(new_key_point)
+            # print(f'new key point: {new_key_point}')
+            # print(f'set len: {set_len}')
+            # print(f'h set offset: {self.homologous_segment_sets[0].offset}')
+            # print(f'choosed: {choosed}')
 
             # reset current coord to newly selected key point
             current_coord = key_points[-1] 

@@ -13,7 +13,7 @@ class Aligner(object):
     DUMMY, DELETION, INSERTION, MATCH = range(4)
     NEG_INF = -99999999
 
-    def __init__(self, ref: np.ndarray, qry: np.ndarray, alg='SW', data_type='PROTEIN', buffer=1/4, band=32):
+    def __init__(self, ref: np.ndarray, qry: np.ndarray, alg='SW', data_type='PROTEIN', band=32):
         '''
             parameter:
             ref: np.ndarray, reference sequence
@@ -51,7 +51,7 @@ class Aligner(object):
         self.alg = alg
         self.data_type = data_type
 
-        self.buffer = buffer
+        # self.buffer = buffer
         self.path = []
 
         self.B = band # num of PEs
@@ -150,122 +150,122 @@ class Aligner(object):
             score = self.score_matrix[len(self.qry)][len(self.ref)]
         return score
 
-    def calculate_score_in_reduced_space(self, key_points: np.ndarray) -> int:
-        '''
-            key_points should be sorted by ascending order
-            deprecated!!!
-        '''
+    # def calculate_score_in_reduced_space(self, key_points: np.ndarray) -> int:
+    #     '''
+    #         key_points should be sorted by ascending order
+    #         deprecated!!!
+    #     '''
         
-        # check if key points are sorted by ascending order
-        for idx, kp in enumerate(key_points):
-            if idx == key_points.shape[0]-1: break
-            next_kp = key_points[idx+1]
-            assert kp[0] <= next_kp[0], f'error, {kp}, {next_kp}'
-            assert kp[1] <= next_kp[1], f'error, {kp}, {next_kp}'
+    #     # check if key points are sorted by ascending order
+    #     for idx, kp in enumerate(key_points):
+    #         if idx == key_points.shape[0]-1: break
+    #         next_kp = key_points[idx+1]
+    #         assert kp[0] <= next_kp[0], f'error, {kp}, {next_kp}'
+    #         assert kp[1] <= next_kp[1], f'error, {kp}, {next_kp}'
         
-        self._reset_matrix()
+    #     self._reset_matrix()
 
-        # add right buttom corner(end point) to key point
-        end_point = np.array([[self.ref.shape[0], self.qry.shape[0]]])
-        key_points = np.concatenate((key_points, end_point), axis=0)
+    #     # add right buttom corner(end point) to key point
+    #     end_point = np.array([[self.ref.shape[0], self.qry.shape[0]]])
+    #     key_points = np.concatenate((key_points, end_point), axis=0)
 
-        x = 1 # there are zero border, so start from 1
-        y = 1 # there are zero border, so start from 1
-        # print(f'key points:')
-        # print(key_points)
-        for k_p in key_points:
-            # print(f'key point: {k_p}')
-            if k_p[0] == k_p[1] == 0:
-                continue
-            for i in range(y, k_p[1]+1):      # i for y-axis, qry, insertion
-                for j in range(x, k_p[0]+1):  # j for x-axis, ref, deletion
-                    self.deletion_matrix[i][j] = max(self.deletion_matrix[i][j-1]+self.gap_ext_penalty, self.score_matrix[i][j-1]+self.gap_open_penalty)
-                    self.insertion_matrix[i][j]  = max(self.insertion_matrix[i-1][j]+self.gap_ext_penalty, self.score_matrix[i-1][j]+self.gap_open_penalty)
-                    # i-1 and j-1 are origin coord (because of padding)
-                    w = 0
-                    if self.data_type == 'DNA' or self.data_type == 'RNA':
-                        w = self.match_score if self.ref[j-1] == self.qry[i-1] else self.mismatch_score
-                    elif self.data_type == 'PROTEIN':
-                        w = BLOSUM62[self.ref[j-1]][self.qry[i-1]]
+    #     x = 1 # there are zero border, so start from 1
+    #     y = 1 # there are zero border, so start from 1
+    #     # print(f'key points:')
+    #     # print(key_points)
+    #     for k_p in key_points:
+    #         # print(f'key point: {k_p}')
+    #         if k_p[0] == k_p[1] == 0:
+    #             continue
+    #         for i in range(y, k_p[1]+1):      # i for y-axis, qry, insertion
+    #             for j in range(x, k_p[0]+1):  # j for x-axis, ref, deletion
+    #                 self.deletion_matrix[i][j] = max(self.deletion_matrix[i][j-1]+self.gap_ext_penalty, self.score_matrix[i][j-1]+self.gap_open_penalty)
+    #                 self.insertion_matrix[i][j]  = max(self.insertion_matrix[i-1][j]+self.gap_ext_penalty, self.score_matrix[i-1][j]+self.gap_open_penalty)
+    #                 # i-1 and j-1 are origin coord (because of padding)
+    #                 w = 0
+    #                 if self.data_type == 'DNA' or self.data_type == 'RNA':
+    #                     w = self.match_score if self.ref[j-1] == self.qry[i-1] else self.mismatch_score
+    #                 elif self.data_type == 'PROTEIN':
+    #                     w = BLOSUM62[self.ref[j-1]][self.qry[i-1]]
 
-                    insertion = (self.insertion_matrix[i][j], self.INSERTION)
-                    deletion  = (self.deletion_matrix[i][j], self.DELETION)
-                    match = (self.score_matrix[i-1][j-1]+w, self.MATCH)
-                    if self.alg == 'SW':
-                        self.score_matrix[i][j], self.trace_matrix[i][j] = max(
-                            match,
-                            deletion,
-                            insertion
-                        )
-                        if self.score_matrix[i][j] < 0: self.score_matrix[i][j] = 0
-                    elif self.alg == 'NW':
-                        self.score_matrix[i][j], self.trace_matrix[i][j] = max(
-                            match,
-                            deletion,
-                            insertion
-                        )
+    #                 insertion = (self.insertion_matrix[i][j], self.INSERTION)
+    #                 deletion  = (self.deletion_matrix[i][j], self.DELETION)
+    #                 match = (self.score_matrix[i-1][j-1]+w, self.MATCH)
+    #                 if self.alg == 'SW':
+    #                     self.score_matrix[i][j], self.trace_matrix[i][j] = max(
+    #                         match,
+    #                         deletion,
+    #                         insertion
+    #                     )
+    #                     if self.score_matrix[i][j] < 0: self.score_matrix[i][j] = 0
+    #                 elif self.alg == 'NW':
+    #                     self.score_matrix[i][j], self.trace_matrix[i][j] = max(
+    #                         match,
+    #                         deletion,
+    #                         insertion
+    #                     )
             
-            # calculate score around keypoint
-            buffer = None
-            # if buffer < 1, buffer = ratio of avg len
-            # else buffer = buffer
-            if self.buffer <= 0:
-                buffer = 0
-            elif self.buffer < 1:
-                buffer = int(((len(self.ref)+len(self.qry)) / 2) * self.buffer)
-            else:
-                buffer = int(self.buffer)
-            lower_x, upper_x = int(max(1, k_p[0]-buffer//2)), int(min(len(self.ref), k_p[0]+buffer//2))
-            lower_y, upper_y = int(max(1, k_p[1]-buffer//2)), int(min(len(self.qry), k_p[1]+buffer//2))
-            # print(f'k_p: {k_p}')
-            # print(f'x range: ({lower_x}, {upper_x+1})')
-            # print(f'y range: ({lower_y}, {upper_y+1})')
-            for i in range(lower_y, upper_y+1):
-                for j in range (lower_x, upper_x+1):
-                    self.deletion_matrix[i][j]  = max(self.deletion_matrix[i][j-1]+self.gap_ext_penalty,  self.score_matrix[i][j-1]+self.gap_open_penalty)
-                    self.insertion_matrix[i][j] = max(self.insertion_matrix[i-1][j]+self.gap_ext_penalty, self.score_matrix[i-1][j]+self.gap_open_penalty)
-                    # i-1 and j-1 are origin coord (because of padding)
-                    w = 0
-                    if self.data_type == 'DNA' or self.data_type == 'RNA':
-                        w = self.match_score if self.ref[j-1] == self.qry[i-1] else self.mismatch_score
-                    elif self.data_type == 'PROTEIN':
-                        w = BLOSUM62[self.ref[j-1]][self.qry[i-1]]
+    #         # calculate score around keypoint
+    #         buffer = None
+    #         # if buffer < 1, buffer = ratio of avg len
+    #         # else buffer = buffer
+    #         if self.buffer <= 0:
+    #             buffer = 0
+    #         elif self.buffer < 1:
+    #             buffer = int(((len(self.ref)+len(self.qry)) / 2) * self.buffer)
+    #         else:
+    #             buffer = int(self.buffer)
+    #         lower_x, upper_x = int(max(1, k_p[0]-buffer//2)), int(min(len(self.ref), k_p[0]+buffer//2))
+    #         lower_y, upper_y = int(max(1, k_p[1]-buffer//2)), int(min(len(self.qry), k_p[1]+buffer//2))
+    #         # print(f'k_p: {k_p}')
+    #         # print(f'x range: ({lower_x}, {upper_x+1})')
+    #         # print(f'y range: ({lower_y}, {upper_y+1})')
+    #         for i in range(lower_y, upper_y+1):
+    #             for j in range (lower_x, upper_x+1):
+    #                 self.deletion_matrix[i][j]  = max(self.deletion_matrix[i][j-1]+self.gap_ext_penalty,  self.score_matrix[i][j-1]+self.gap_open_penalty)
+    #                 self.insertion_matrix[i][j] = max(self.insertion_matrix[i-1][j]+self.gap_ext_penalty, self.score_matrix[i-1][j]+self.gap_open_penalty)
+    #                 # i-1 and j-1 are origin coord (because of padding)
+    #                 w = 0
+    #                 if self.data_type == 'DNA' or self.data_type == 'RNA':
+    #                     w = self.match_score if self.ref[j-1] == self.qry[i-1] else self.mismatch_score
+    #                 elif self.data_type == 'PROTEIN':
+    #                     w = BLOSUM62[self.ref[j-1]][self.qry[i-1]]
 
-                    insertion = (self.insertion_matrix[i][j], self.INSERTION)
-                    deletion  = (self.deletion_matrix[i][j], self.DELETION)
-                    match = (self.score_matrix[i-1][j-1]+w, self.MATCH)
-                    if self.alg == 'SW':
-                        self.score_matrix[i][j], self.trace_matrix[i][j] = max(
-                            match,
-                            deletion,
-                            insertion
-                        )
-                        if self.score_matrix[i][j] < 0: self.score_matrix[i][j] = 0
-                    elif self.alg == 'NW':
-                        self.score_matrix[i][j], self.trace_matrix[i][j] = max(
-                            match,
-                            deletion,
-                            insertion
-                        )
+    #                 insertion = (self.insertion_matrix[i][j], self.INSERTION)
+    #                 deletion  = (self.deletion_matrix[i][j], self.DELETION)
+    #                 match = (self.score_matrix[i-1][j-1]+w, self.MATCH)
+    #                 if self.alg == 'SW':
+    #                     self.score_matrix[i][j], self.trace_matrix[i][j] = max(
+    #                         match,
+    #                         deletion,
+    #                         insertion
+    #                     )
+    #                     if self.score_matrix[i][j] < 0: self.score_matrix[i][j] = 0
+    #                 elif self.alg == 'NW':
+    #                     self.score_matrix[i][j], self.trace_matrix[i][j] = max(
+    #                         match,
+    #                         deletion,
+    #                         insertion
+    #                     )
             
-            x = k_p[0]
-            y = k_p[1]
+    #         x = k_p[0]
+    #         y = k_p[1]
         
-        # calculate reduce area
-        total_area = len(self.ref)*len(self.qry)
-        full_area = self.trace_matrix[1:, 1:]
-        reduced_area = (full_area == self.DUMMY).sum()
-        reduced_ratio = reduced_area/total_area
+    #     # calculate reduce area
+    #     total_area = len(self.ref)*len(self.qry)
+    #     full_area = self.trace_matrix[1:, 1:]
+    #     reduced_area = (full_area == self.DUMMY).sum()
+    #     reduced_ratio = reduced_area/total_area
 
-        # set neg inf back to 0 for heat map illustration
-        self.score_matrix[self.score_matrix == self.NEG_INF] = 0
+    #     # set neg inf back to 0 for heat map illustration
+    #     self.score_matrix[self.score_matrix == self.NEG_INF] = 0
 
-        score = None
-        if self.alg == 'SW':
-            score = self.score_matrix.max()
-        elif self.alg == 'NW':
-            score = self.score_matrix[len(self.qry)][len(self.ref)]
-        return score, reduced_ratio
+    #     score = None
+    #     if self.alg == 'SW':
+    #         score = self.score_matrix.max()
+    #     elif self.alg == 'NW':
+    #         score = self.score_matrix[len(self.qry)][len(self.ref)]
+    #     return score, reduced_ratio
 
     def PE(self, i, j):
         i = int(i)
@@ -372,7 +372,7 @@ class Aligner(object):
         
     def calculate_score_hardware_reduced(self, key_points: np.ndarray) -> int:
         self.operation_cycles = 0
-        debug = True
+        debug = False
         for idx, kp in enumerate(key_points):
             if idx == key_points.shape[0]-1: break
             next_kp = key_points[idx+1]
@@ -453,7 +453,7 @@ class Aligner(object):
                     if key_point[0] != i+self.B//2-1 or key_point[1] != j-self.B//2:
                         print('error!')
                         exit()
-                    else: print('good')
+                    elif debug: print('good')
             elif case == 2:
                 # SW downward
                 j_bound = key_point[1]-key_point[0]+i+(self.B-1)
@@ -489,7 +489,7 @@ class Aligner(object):
                     if key_point[0] != i+self.B//2-1 or key_point[1] != j-self.B//2:
                         print('error!')
                         exit()
-                    else: print('good')
+                    elif debug: print('good')
             elif case == 3:
                 j_bound = key_point[1]-pos_i-1
                 if debug: print(f'case 3, j bound = {j_bound}')
@@ -533,7 +533,7 @@ class Aligner(object):
                     if key_point[0] != i+self.B//2-1 or key_point[1] != j-self.B//2:
                         print('error!')
                         exit()
-                    else: print('good')
+                    elif debug: print('good')
             elif case == 4:
                 j_bound = min(key_point[1]+(self.B-pos_i)-1, len(self.qry))
                 if debug: print(f'case4, j bound: {j_bound}')
@@ -575,7 +575,7 @@ class Aligner(object):
                     if key_point[0] != i+self.B//2-1 or key_point[1] != j-self.B//2:
                         print('error!')
                         exit()
-                    else: print('good')
+                    elif debug: print('good')
             elif case == 5:
                 j_bound = len(self.qry)
                 lower_bound = max(1, j-self.B+1)

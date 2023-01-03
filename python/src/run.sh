@@ -58,27 +58,27 @@
 # python3 main.py --threshold 18 --window_size 16 --alg NW --quant_volume 0 --band 64 --n 4 --test_case cah
 # python3 main.py --threshold 20 --window_size 16 --alg NW --quant_volume 0 --band 32 --n 4 --test_case cyclo
 
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case aadh
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case aat
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case ace
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case asp
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case blm
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case blmb
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case cah
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case az
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case biotin_lipoyl
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case bowman
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case cah
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case cyclo
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case ghf1
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case ghf13
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case gpdh
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case hormone_rec
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case il8
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case egf
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case p450
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case slectin
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case zf-CCHH
+# python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case aadh           --log_each_alignment True  
+# python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case aat            --log_each_alignment True  
+# python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case ace            --log_each_alignment True  
+# python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case asp            --log_each_alignment True  
+# python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case blm            --log_each_alignment True  
+# python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case blmb           --log_each_alignment True    
+# python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case cah            --log_each_alignment True  
+# python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case az             --log_each_alignment True
+# python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case biotin_lipoyl  --log_each_alignment True            
+# python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case bowman         --log_each_alignment True    
+# python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case cah            --log_each_alignment True  
+# python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case cyclo          --log_each_alignment True    
+# python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case ghf1           --log_each_alignment True  
+python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case ghf13          --log_each_alignment True    
+python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case gpdh           --log_each_alignment True  
+python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case hormone_rec    --log_each_alignment True          
+python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case il8            --log_each_alignment True  
+python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case egf            --log_each_alignment True  
+python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case p450           --log_each_alignment True  
+python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case slectin        --log_each_alignment True      
+python3 main.py --threshold 10 --window_size 17 --alg NW --band 32 --n 4 --test_case zf-CCHH        --log_each_alignment True      
 
 # python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case Acetyltransf
 # python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case Ald_Xan_dh_2
@@ -138,7 +138,7 @@
 # python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case rnasemam
 # python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case rrm
 # python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case rub
-# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case rvp
+# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case rvp 
 # python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case scorptoxin
 # python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case sdr
 # python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case seatoxin
@@ -148,9 +148,9 @@
 # python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case mofe
 #################### here #####################
 # python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case sodcu
-python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case sti
-python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case subt
-python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case tRNA-synt_2b
+# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case sti
+# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case subt
+# python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case tRNA-synt_2b
 # python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case tgfb
 # python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case tim
 # python3 main.py --threshold 18 --window_size 16 --alg NW --band 32 --n 4 --test_case tms

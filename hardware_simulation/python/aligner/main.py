@@ -323,7 +323,7 @@ def gen_testcase_with_FASTA_file(path_to_ref, path_to_qry):
       f.write('\n')
 
   homologous_threshold = 18
-  homologous_window_size = 16
+  homologous_window_size = 17
   alg = 'NW'
   data_type = 'PROTEIN'
   n = 4
@@ -366,7 +366,7 @@ def gen_testcase_with_FASTA_file(path_to_ref, path_to_qry):
         f.write('\n')
 
     # print('Running reduced DP...')
-    dp_engine = DPEngine(ref, qry, alg=alg, data_type=data_type, buffer=0, band=band)
+    dp_engine = DPEngine(ref, qry, alg=alg, data_type=data_type, band=band)
     golden, _ = dp_engine.dp_in_reduced_space(key_points)
     # dp_engine.traceback()
     # reduced_operation_cycles = dp_engine.dp_operation_cycles

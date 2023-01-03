@@ -4,39 +4,10 @@ import sys
 sys.path.insert(1, '/Users/ctchen/Desktop/special_project/Lu/110/code/python/src')
 sys.path.insert(1, '../max_offset')
 from quantize import float_to_fixed_bin
+from config import AMINO_ACID, BLOSUM62
 from Homologous import Homologous
 from CrossCorrelation import CrossCorrelation
 from ReduceSearchSpace import ReduceSearchSpace
-
-BLOSUM62 = [
-  [  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0], 
-  [  0,  4,  0,  0, -2, -1, -2,  0, -2, -1,  0, -1, -1, -1, -2,  0, -1, -1, -1,  1,  0,  0,  0, -3,  0, -2,  0], 
-  [  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0], 
-  [  0,  0,  0,  9, -3, -4, -2, -3, -3, -1,  0, -3, -1, -1, -3,  0, -3, -3, -3, -1, -1,  0, -1, -2,  0, -2,  0], 
-  [  0, -2,  0, -3,  6,  2, -3, -1, -1, -3,  0, -1, -4, -3,  1,  0, -1,  0, -2,  0, -1,  0, -3, -4,  0, -3,  0], 
-  [  0, -1,  0, -1,  2,  5, -3, -2,  0, -3,  0,  1, -3, -2,  0,  0, -1,  2,  0,  0, -1,  0, -2, -3,  0, -2,  0], 
-  [  0, -2,  0, -2, -3, -3,  6, -3, -1,  0,  0, -3,  0,  0, -3,  0, -4, -3, -3, -2, -2,  0, -1,  1,  0,  3,  0], 
-  [  0,  0,  0, -3, -1, -2, -3,  6, -2, -3,  0, -2, -4, -3,  0,  0, -2, -2, -2,  0, -2,  0, -3, -2,  0, -3,  0], 
-  [  0, -2,  0, -3, -1,  0, -1, -2,  8, -3,  0, -1, -3, -2,  1,  0, -2,  0,  0, -1, -2,  0, -3, -2,  0,  2,  0], 
-  [  0, -1,  0, -1, -3, -3,  0, -4, -3,  4,  0, -3,  2,  1, -3,  0, -3, -3, -3, -2, -1,  0,  3, -3,  0, -1,  0], 
-  [  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0], 
-  [  0, -1,  0, -3, -1,  1, -3, -2, -1, -3,  0,  5, -2, -1,  0,  0, -1,  1,  2,  0, -1,  0, -2, -3,  0, -2,  0], 
-  [  0, -1,  0, -1, -4, -3,  0, -4, -3,  2,  0, -2,  4,  2, -3,  0, -4, -3, -3, -3, -2,  0,  2, -3,  0, -2,  0], 
-  [  0, -1,  0, -1, -3, -2,  0, -3, -2,  1,  0, -1,  2,  5, -2,  0, -2,  0, -1, -1, -1,  0,  1, -1,  0, -1,  0], 
-  [  0, -2,  0, -3,  1,  0, -3,  0,  1, -3,  0,  0, -3, -2,  6,  0, -2,  0,  0,  1,  0,  0, -3, -4,  0, -2,  0], 
-  [  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0], 
-  [  0, -1,  0, -3, -1, -1, -4, -2, -2, -3,  0, -1, -3, -2, -2,  0,  7, -1, -2, -1,  -1, 0, -2, -4,  0, -3,  0], 
-  [  0, -1,  0, -3,  0,  2, -3, -2,  0, -3,  0,  1, -2,  0,  0,  0, -1,  5,  1,  0, -1,  0, -2, -2,  0, -1,  0], 
-  [  0, -1,  0, -3, -2,  0, -3, -2,  0, -3,  0,  2, -2, -1,  0,  0, -2,  1,  5, -1, -1,  0, -3, -3,  0, -2,  0], 
-  [  0,  1,  0, -1,  0,  0, -2,  0, -1, -2,  0,  0, -2, -1,  1,  0, -1,  0, -1,  4,  1,  0, -2, -3,  0, -2,  0], 
-  [  0,  0,  0, -1, -1, -1, -2, -2, -2, -1,  0, -1, -1, -1,  0,  0, -1, -1, -1,  1,  5,  0,  0, -2,  0, -2,  0], 
-  [  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0], 
-  [  0,  0,  0, -1, -3, -2, -1, -3, -3,  3,  0, -2,  1,  1, -3,  0, -2, -2, -3, -2,  0,  0,  4, -3,  0, -1,  0], 
-  [  0, -3,  0, -2, -4, -3,  1, -2, -2, -3,  0, -3, -2, -1, -4,  0, -4, -2, -3, -3, -2,  0, -3, 11,  0,  2,  0], 
-  [  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0], 
-  [  0, -2,  0, -2, -3, -2,  3, -3,  2, -1,  0, -2, -1, -1, -2,  0, -3, -1, -2, -2, -2,  0, -1,  2,  0,  7,  0], 
-  [  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0], 
-]
 
 hardware_amino_mapping = {
   '-': 0,
@@ -68,6 +39,25 @@ hardware_amino_mapping = {
   'Z': 26,
 }
 
+def read_FASTA(path):
+  symbol = AMINO_ACID
+
+  sequence = []
+  with open(path, 'r') as f:
+    description = f.readline()[1:-1]
+    while True:
+      char = f.read(1)
+      if not char:
+        break
+      elif char == '\n':
+        continue
+      elif char not in symbol.keys():
+        raise ValueError(f'including unkown symbol "{char}"')
+      sequence.append(symbol[char])
+
+  sequence = np.array(sequence)
+  return sequence
+
 def calc_score(seq1, seq2):
   assert len(seq1) == len(seq2), 'length should be the same!'
   
@@ -93,26 +83,11 @@ def sliding_window(seq1, seq2, offset, window_size=15, threshold=3):
         segment_set.append(i+window_size//2)
   return segment_set
 
-def main():
-  NUM_OF_SET = 4
-  NUM_OF_PE = 32
-  window_size = 15
-  threshold = 3
-  # N = 32
-  # M = 32
-  # seq1 = np.array([i%15 for i in range(N)])
-  # seq2 = np.array([i%15 for i in range(M)])
-
-  seq1 = "GGSLARTEATGYGSVYFANEMLKKSGGSLEGKKCSVSGAGNVAIYTVEKLYEFGALPITVSDSTGFVYDKDGIDTQLLKRLKEVERKGLSDYTDFRKNAVFTPVKAYKEGTNGVWSVPCDAAFPSATQNELHLVDIKTLYNNGCRLVCEGANMPSTLDAIDFMISKKDFLFGPAKAANAGGVATSGLEMAQNASMQKWSFEEVDKKLHDIMRNIFNESYDTSVEFGDAGNLVLGANIAGFRKVADAMIDQG"
-  seq1 = "LVSGSGNVAQFAIEKLLEYGAIPMSLSDSNGTIIEPNGFTSEQLKQIMELKNVKRGRISEYTALSSTAKYYEGKRPWAVYEGSVDVILPCATQNEVTGEEALRVIKQGVKYVAEGANMPSTDEAIHAYHANKVFYGPAKASNAGGVATSGLEMTQNSNRIQWSAERVDEELHNIMRSIFQQCKETAEK"
-  seq2 = "GINHKEFGVTSTGVVRFAEITMADLGIDMVNHPFSVKFTGGPNGDVAGNAMRIMLERYPRMQIRLILDGTAALYDPKGARHGELERILLKEDLDGFNPQALHEGGFMLFRSGSRTEGLRTLYRKATMGGDGLTEQWISIDEFSREFGDLPFTTQADLFIPGGGRPETIDARNWERFFLPDGTPSARAIIEGANSFITPDARVQLQKRGVIIMRDASANKCGVISSSYEIIANLLMADAEFLAEKEEYVGGVIAILEKR"
-  seq2 = "GSQARTEATGYGTVYFVKHLLADKNDTFEGKKVAVSGSGNVAIYAMEKATELGATVITCSDSSGFVYDPEGIDVALVKELKEKNRERISKYVETRKGATYYDKESVWDFETAYDIALPCATQNEINEKQAAILVKNGVKVVAEGANMPCTLEAVAVFAKSAVIYCPGKAANAGGVAVSALEMSQNAERLAWSFEKVDGMLDQIMQNIYETCRDTANEYQARDNFVLGANIAGFEKVAAAMLSQG"
-  seq1 = np.array([hardware_amino_mapping[f'{c}'] for c in seq1])
-  seq2 = np.array([hardware_amino_mapping[f'{c}'] for c in seq2])
-
+def gen_testcase_with_FASTA_file(path_to_ref, path_to_qry, threshold, window_size, NUM_OF_PE, buffer):
+  seq1 = read_FASTA(path_to_ref)
+  seq2 = read_FASTA(path_to_qry)
   seq1_bit = [float_to_fixed_bin(i, 5, 0, signed=False) for i in seq1]
   seq2_bit = [float_to_fixed_bin(i, 5, 0, signed=False) for i in seq2]
-
   with open('pattern/seq1.txt', 'w') as f:
     f.write(float_to_fixed_bin(len(seq1), 9, 0))
     f.write(f' // {len(seq1)}')
@@ -151,7 +126,7 @@ def main():
     if len(s.coords) > 0: print(f'segments: {s.coords[:, 0]}')
     else: print('segments: []')
 
-  reducer = ReduceSearchSpace(homologous_segments_sets, len(seq1), len(seq2), B=NUM_OF_PE)
+  reducer = ReduceSearchSpace(homologous_segments_sets, len(seq1), len(seq2), NUM_OF_PE, buffer)
   key_points = reducer.reduce()
   print(f'total key points found: {len(key_points)}')
   print(key_points)
@@ -174,8 +149,75 @@ def main():
       f.write(f" // {key_point_seq2[i]}")
       f.write('\n')
   
+def main():
+  NUM_OF_SET = 4
+  NUM_OF_PE = 32
+  window_size = 17
+  threshold = 18
+  buffer_between_keypoint=4
+  out_prefix = '../../../data/FASTA/protein/homfam/'
+
+  ref = None
+  qry = None
+
+  # test case 0
+  # ref = 'c'
+  # qry = 'd'
+
+  # test case 1
+  # ref = 'a'
+  # qry = 'b'
+
+  # test case 2
+  # ref = 'ref'
+  # qry = 'qry'
+
+  # test case 3
+  # ref = 'e'
+  # qry = 'f'
+
+  # test case 4
+  # ref = 'g'
+  # qry = 'h'
+
+  # test case 5
+  # ref = '1-ref'
+  # qry = '1-qry'
+
+  # test case 6
+  # ref = 'c'
+  # qry = 'd'
+  # threshold = 5
+
+  # test case 7
+  # ref = 'ref'
+  # qry = 'qry'
+  # threshold = 5
+
+  # test case 8
+  # ref = 'ref'
+  # qry = 'qry'
+  # threshold = 1
+
+  # test case 9
+  # ref = 'a'
+  # qry = 'b'
+  # threshold = 1
+  # window_size = 13
+
+  # test case 10
+  ref = 'ref'
+  qry = 'qry'
+  threshold = 2
+  window_size = 25
+
+
+  gen_testcase_with_FASTA_file(out_prefix+ref, out_prefix+qry, threshold, window_size, NUM_OF_PE, buffer_between_keypoint)
+  
 
 
 
 if __name__ == '__main__':
+  # b = np.array(BLOSUM62)
+  # print(b.min())
   main()

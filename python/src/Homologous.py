@@ -7,7 +7,7 @@ from config import BLOSUM62, AMINO_ACID_MAPPING, DATA_TYPES
 from tool import random_gen_seq
 
 class Homologous(object):
-    def __init__(self, ref: np.ndarray, qry: np.ndarray, cross_cor, data_type: str='DNA', threshold=180, n=16, wndw_size=30, l=150, B=32):
+    def __init__(self, ref: np.ndarray, qry: np.ndarray, cross_cor, data_type: str='DNA', threshold=180, n=16, wndw_size=30, l=150, B=32, buffer=4):
         # assert len(ref) == len(qry)
         assert type(ref) == np.ndarray 
         assert type(qry) == np.ndarray
@@ -25,6 +25,7 @@ class Homologous(object):
         self.wndw_size = wndw_size      # window size for sliding window
         self.maximum_segment_length = l # maximum length for homologous segment)
         self.B = B # num of PE in PE array
+        self.buffer = buffer
     
     def _get_score(self, ref: np.ndarray, qry: np.ndarray, mode='DOT', debug=False):
         '''
@@ -50,10 +51,10 @@ class Homologous(object):
                 for i in range(len(ref)):
                     # print(f'pair: <{AMINO_ACID_MAPPING[f"{ref[i]}"]}, {AMINO_ACID_MAPPING[f"{qry[i]}"]}>')
                     s = BLOSUM62[ref[i]][qry[i]]
-                    # if debug:
-                    #     print(f'pair: <{ref[i]}, {qry[i]}>')
-                    #     print(f'score: {s}')
                     score += s
+                    if debug:
+                        print(f'pair: <{ref[i]}, {qry[i]}>')
+                        print(f'total score: {score}')
             # if debug: print(f'score: {score}')
             return score
         
@@ -112,7 +113,9 @@ class Homologous(object):
         # print(f'end: {sliding_wndw_end_idx}')
 
         for i in range (sliding_wndw_start_idx, sliding_wndw_end_idx+1):
-            debug_ = True
+            # if (i+self.wndw_size-abs_offset) == 17: debug_ = True
+            # else: debug_ = False 
+            debug_ = False
             # if debug_ and offset == 7 and i == 134: print(f'sliding at {i}')
             # if i == 281 and offset == -241: debug_ = True
             score = self._get_score(padded_ref[i:i+self.wndw_size], padded_qry[i:i+self.wndw_size], debug=debug_)
@@ -127,17 +130,24 @@ class Homologous(object):
             ##### debug
             # print(score)
             #####
-            if score > self.threshold and (i-abs_offset) > self.B//2+2 and i > self.B//2+2:
+            # if offset == -34 and i-abs_offset > 150: print(f'(i, j): ({i+self.wndw_size-1-abs_offset}, {i+self.wndw_size-1-abs_offset-offset}),  coord: {i+self.wndw_size-1-abs_offset-self.wndw_size//2}, score: {score}')
+            # if (i+self.wndw_size-abs_offset) == 17: print(padded_ref[i:i+self.wndw_size])
+            # if (i+self.wndw_size-abs_offset) == 17: print(padded_qry[i:i+self.wndw_size])
+            if score > self.threshold and (i-abs_offset)+(self.wndw_size//2) > self.B//2+self.buffer and i+self.wndw_size//2 > self.B//2+self.buffer:
                 score_list.append(score)
                 if offset < 0:
                     # print(f'offset: {offset}')
                     # print(f'append {i-offset}')
-                    if len(ref_segment_list) and (i-abs_offset)-ref_segment_list[-1] > 2:
+                    if len(ref_segment_list) == 0:
+                        ref_segment_list.append(i-abs_offset)
+                    elif (i-abs_offset)-ref_segment_list[-1] > self.buffer:
                         ref_segment_list.append(i-abs_offset)
                 else:
                     # print(f'offset: {offset}')
                     # print(f'append {i}')
-                    if len(ref_segment_list) and i-ref_segment_list[-1] > 2:
+                    if len(ref_segment_list) == 0:
+                        ref_segment_list.append(i)
+                    elif i-ref_segment_list[-1] > self.buffer:
                         ref_segment_list.append(i)
             
         ref_segments = [[i, i+self.wndw_size] for i in ref_segment_list]

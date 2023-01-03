@@ -53,9 +53,20 @@ if __name__ == '__main__':
     f_a = np.fft.rfft(a_pad)
     f_b = np.fft.rfft(b_pad)
     f_b = np.conjugate(f_b)
+    # print(f_a*f_b)
     c = np.fft.irfft(f_a*f_b).astype(float)
     print("Numpy FFT cross-correlation:")
     # print(np.array_repr(c).replace('\n', ''))
     c = np.roll(c, M-1)[0:M+N-1]
     print(f'length: {len(c)}')
     print(np.array_repr(c[0:10]).replace('\n', ''))
+
+    # print("============================")
+    # f_a = np.fft.fft(a_pad)
+    # f_b = np.fft.fft(b_pad)
+    # f_b = np.conjugate(f_b)
+    # c = np.fft.ifft(f_a*f_b).astype(float)
+    # c = np.roll(c, M-1)[0:M+N-1]
+    # print(f'length: {len(c)}')
+    # print(np.array_repr(c[0:10]).replace('\n', ''))
+    
